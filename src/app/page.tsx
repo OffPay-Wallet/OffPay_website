@@ -8,6 +8,9 @@
  * Individual interactive sections declare "use client" in their own files.
  */
 
+// Render at the Vercel Edge Network for lower TTFB worldwide
+export const runtime = "edge";
+
 import Hero from "@/components/sections/Hero";
 import LayersProviders from "@/components/sections/LayersProviders";
 import DemoVideo from "@/components/sections/DemoVideo";
