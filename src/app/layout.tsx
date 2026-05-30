@@ -7,7 +7,7 @@ import ContentProtection from "@/components/ui/ContentProtection";
 import LoadingScreen from "@/components/ui/LoadingScreen";
 import SmoothScrollProvider from "@/components/SmoothScrollProvider";
 import { LoadingProvider } from "@/context/LoadingContext";
-import { NAV_LINKS, SITE_NAME, SITE_DESCRIPTION, SITE_URL, HERO_CTA_PRIMARY } from "@/constants";
+import { NAV_LINKS, SITE_NAME, SITE_DESCRIPTION, SITE_URL } from "@/constants";
 import { allFontVariables } from "./fonts";
 
 
