@@ -36,7 +36,6 @@ import {
   JUPITER_SWAP_HEADLINE,
   FAQ_HEADLINE,
   FAQ_ITEMS,
-  DOWNLOAD_APK_URL,
 } from "@/constants";
 
 // ---------------------------------------------------------------------------
@@ -88,11 +87,7 @@ export default function Home() {
         ctaPrimary={
           <GlowButton
             label={HERO_CTA_PRIMARY}
-            href={DOWNLOAD_APK_URL}
             variant="primary"
-            target="_blank"
-            rel="noopener noreferrer"
-            download
           />
         }
       />
@@ -119,18 +114,15 @@ export default function Home() {
       <Faq headline={FAQ_HEADLINE} items={FAQ_ITEMS} />
 
       <Cta
-        headline="OffPay is live."
+        headline="OffPay is coming soon."
         supporting="Send and receive money on Solana, even without internet. Swap tokens, keep your balance private, and stay in full control of your wallet at all times."
         action={
-          <a
-            href={DOWNLOAD_APK_URL}
+          <span
             className="btn btn-primary"
-            target="_blank"
-            rel="noopener noreferrer"
-            download
+            style={{ cursor: "default", opacity: 0.85, pointerEvents: "none" }}
           >
-            {HERO_CTA_PRIMARY}
-          </a>
+            Coming soon
+          </span>
         }
       />
     </main>

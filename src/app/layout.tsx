@@ -7,7 +7,7 @@ import ContentProtection from "@/components/ui/ContentProtection";
 import LoadingScreen from "@/components/ui/LoadingScreen";
 import SmoothScrollProvider from "@/components/SmoothScrollProvider";
 import { LoadingProvider } from "@/context/LoadingContext";
-import { NAV_LINKS, SITE_NAME, SITE_DESCRIPTION, SITE_URL, HERO_CTA_PRIMARY, DOWNLOAD_APK_URL } from "@/constants";
+import { NAV_LINKS, SITE_NAME, SITE_DESCRIPTION, SITE_URL, HERO_CTA_PRIMARY } from "@/constants";
 import { allFontVariables } from "./fonts";
 
 
@@ -36,30 +36,26 @@ const LOGO_STUB = (
 );
 
 const NAVBAR_CTA_STUB = (
-  <a
-    href={DOWNLOAD_APK_URL}
-    target="_blank"
-    rel="noopener noreferrer"
-    download
+  <span
     style={{
       display: "inline-block",
       padding: "8px 20px",
       fontSize: "14px",
       fontFamily: "var(--font-nav)",
       fontWeight: 500,
-      color: "var(--color-text)",
+      color: "var(--color-text-muted)",
       background: "var(--color-text-inverse)",
       border: "1px solid var(--color-border)",
       borderRadius: "9999px",
-      textDecoration: "none",
       letterSpacing: "0",
       whiteSpace: "nowrap",
-      transition: "all 0.2s ease",
       boxShadow: "0 10px 24px rgba(14, 42, 53, 0.14), inset 1px 1px 0 rgba(252, 252, 255, 0.78)",
+      cursor: "default",
+      opacity: 0.85,
     }}
   >
-    {HERO_CTA_PRIMARY}
-  </a>
+    Coming soon
+  </span>
 );
 
 // ---------------------------------------------------------------------------

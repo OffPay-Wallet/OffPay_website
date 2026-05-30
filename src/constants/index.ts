@@ -35,7 +35,7 @@ export const HERO_HEADLINE_LINE1 = "Private payments." as const;
 export const HERO_HEADLINE_LINE2 = "Shielded balances. Offline payments." as const;
 export const HERO_SUBHEADLINE =
   "Private payments, offline transfers, Jupiter swaps, and Umbra shielded balances — all in one wallet." as const;
-export const HERO_CTA_PRIMARY = "Download now" as const;
+export const HERO_CTA_PRIMARY = "Coming soon" as const;
 
 /** Release/download page. All download CTAs across the site route here. */
 export const DOWNLOAD_APK_URL = "https://github.com/ikarn-dev/offpay/releases/tag/v1.0" as const;
@@ -114,7 +114,7 @@ export const FAQ_ITEMS: FaqItem[] = [
 export const FOOTER_COPYRIGHT_YEAR = 2026 as const;
 
 export const FOOTER_EMAIL = "hello@offpay.app" as const;
-export const FOOTER_CTA_HEADING = "Download" as const;
+export const FOOTER_CTA_HEADING = "Coming soon" as const;
 
 export const FOOTER_SOCIAL_LABELS = ["Twitter / X", "GitHub"] as const;
 

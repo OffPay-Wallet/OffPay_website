@@ -75,14 +75,9 @@ export default function Hero({
             display: "flex",
             justifyContent: "center",
             alignItems: "center",
-            gap: "0.5rem",
-            flexWrap: "wrap",
           }}
         >
           <HeroBadge />
-          <div className="hero-network-pill">
-            <span className="hero-network-pill__label">Mainnet Live</span>
-          </div>
         </div>
 
         {/* Headline — triggers only after loading screen exits */}
