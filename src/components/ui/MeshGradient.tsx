@@ -44,9 +44,9 @@ export default function MeshGradient({ className, style }: MeshGradientProps) {
           position: "absolute",
           inset: 0,
           background: `
-            radial-gradient(circle at 50% 20%, rgba(252, 252, 255, 0.82) 0%, rgba(252, 252, 255, 0) 34%),
-            radial-gradient(circle at 18% 82%, rgba(223, 247, 250, 0.72) 0%, rgba(223, 247, 250, 0) 32%),
-            linear-gradient(180deg, #5BC8E8 0%, #BDEFF7 38%, #FCFCFF 64%, #DFF7FA 84%, #5BC8E8 100%)
+            radial-gradient(circle at 50% 20%, rgba(255, 255, 255, 0.08) 0%, rgba(255, 255, 255, 0) 34%),
+            radial-gradient(circle at 18% 82%, rgba(255, 255, 255, 0.04) 0%, rgba(255, 255, 255, 0) 32%),
+            linear-gradient(180deg, #000000 0%, #1A1A1A 38%, #2D2D2D 64%, #1A1A1A 84%, #0A0A0A 100%)
           `,
         }}
       />
@@ -58,14 +58,14 @@ export default function MeshGradient({ className, style }: MeshGradientProps) {
         style={{
           position: "absolute",
           inset: 0,
-          opacity: 0.2,
-          mixBlendMode: "multiply",
+          opacity: 0.3,
+          mixBlendMode: "screen",
         }}
       >
         <HalftoneDots
           style={{ width: "100%", height: "100%" }}
-          colorBack="#DFF7FA"
-          colorFront="#5BC8E8"
+          colorBack="#000000"
+          colorFront="#6B6B6B"
           originalColors={false}
           type="gooey"
           grid="hex"

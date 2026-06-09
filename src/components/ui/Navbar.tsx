@@ -1,35 +1,44 @@
-/**
- * Navbar — clean, minimal top navigation bar.
- *
- * Desktop: frosted floating bar — logo left · links center · CTA right.
- * Mobile:  hamburger → the navbar itself extends downward as a single
- *          continuous glassmorphic card, slides up on close.
- */
-
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
+import Link from "next/link";
+import { motion } from "motion/react";
 import type { NavLink } from "@/types";
-import NavCtaButton from "@/components/ui/NavCtaButton";
-
-/* ------------------------------------------------------------------ */
-/* Props                                                               */
-/* ------------------------------------------------------------------ */
+import NavLogo from "./NavLogo";
 
 export interface NavbarProps {
-  logo: React.ReactNode;
   links: NavLink[];
-  cta: React.ReactNode;
 }
 
-/* ------------------------------------------------------------------ */
-/* Component                                                           */
-/* ------------------------------------------------------------------ */
-
-export default function Navbar({ logo, links, cta }: NavbarProps) {
+export default function Navbar({ links }: NavbarProps) {
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
+  const [hoverStyle, setHoverStyle] = useState({ left: 0, width: 0, opacity: 0 });
+  const containerRef = useRef<HTMLDivElement>(null);
 
-  /* Lock body scroll when mobile menu is open */
+  const handleMouseEnter = (index: number, e: React.MouseEvent<HTMLAnchorElement>) => {
+    setHoveredIndex(index);
+    const container = containerRef.current;
+    if (!container) return;
+    
+    const containerRect = container.getBoundingClientRect();
+    const elRect = e.currentTarget.getBoundingClientRect();
+    
+    // Calculate position relative to the container's padding
+    const leftPosition = elRect.left - containerRect.left;
+    
+    setHoverStyle({
+      left: leftPosition,
+      width: elRect.width,
+      opacity: 1
+    });
+  };
+
+  const handleMouseLeave = () => {
+    setHoveredIndex(null);
+    setHoverStyle(prev => ({ ...prev, opacity: 0 }));
+  };
+
   useEffect(() => {
     if (mobileOpen) {
       document.body.style.overflow = "hidden";
@@ -42,282 +51,159 @@ export default function Navbar({ logo, links, cta }: NavbarProps) {
   }, [mobileOpen]);
 
   return (
-    <>
-      {/* ---- Responsive CSS ---- */}
-      <style>{`
-        .navbar-desktop-links,
-        .navbar-desktop-cta {
-          display: flex;
-        }
-        .navbar-hamburger {
-          display: none;
-        }
-        .navbar-mobile-dropdown {
-          display: none;
-        }
-        .navbar-mobile-backdrop {
-          display: none;
-        }
+    <header className="pointer-events-none fixed top-0 left-0 right-0 w-full font-mono text-white transition-colors duration-300 z-50">
+      <div className="pt-0 pb-0 mx-auto max-w-[90rem] px-5 flex w-full items-end justify-between h-[100px]">
+        <div className="w-full flex items-center justify-between z-[2] relative">
+          
+          {/* Logo */}
+          <NavLogo />
 
-        @media (max-width: 768px) {
-          .navbar-desktop-links,
-          .navbar-desktop-cta {
-            display: none !important;
-          }
-          .navbar-hamburger {
-            display: flex !important;
-          }
-          .navbar-mobile-dropdown {
-            display: block !important;
-          }
-          .navbar-mobile-backdrop {
-            display: block !important;
-          }
-        }
-      `}</style>
+          {/* Desktop links container */}
+          <div 
+            ref={containerRef}
+            className="h-[38px] hidden lg:flex flex-row items-center px-[3px] bg-white/15 backdrop-blur-md text-white rounded-full opacity-100 pointer-events-none relative overflow-visible"
+            onMouseLeave={handleMouseLeave}
+          >
+            {/* Sliding Hover Pill */}
+            <motion.div
+              className="absolute rounded-full pointer-events-none"
+              style={{ 
+                zIndex: 0,
+                top: '3px',
+                bottom: '3px',
+                background: 'rgba(255, 255, 255, 0.35)',
+                backdropFilter: 'blur(12px)',
+                WebkitBackdropFilter: 'blur(12px)',
+              }}
+              initial={false}
+              animate={{
+                left: hoverStyle.left,
+                width: hoverStyle.width,
+                opacity: hoverStyle.opacity
+              }}
+              transition={{ type: "spring", stiffness: 400, damping: 30 }}
+            />
 
-      {/* ---- Backdrop (mobile only, click to close) ---- */}
+            {links.map((link, index) => (
+              <Link 
+                key={link.label}
+                data-nav-index={index}
+                href={link.href}
+                onMouseEnter={(e) => handleMouseEnter(index, e)}
+                className="relative z-10 flex items-center justify-center rounded-full px-4 py-1.5 font-medium font-mono uppercase text-[16px] leading-none tracking-[-0.02em] pointer-events-auto cursor-pointer"
+                style={{ WebkitTapHighlightColor: 'transparent' }}
+              >
+                <span className="relative z-10 block mt-px">{link.label}</span>
+              </Link>
+            ))}
+          </div>
+          </div>
+
+          {/* Desktop CTA */}
+          <Link
+            target="_blank"
+            rel="noopener noreferrer"
+            href="https://github.com/ikarn-dev/offpay"
+            className="rounded-full px-4 h-[38px] items-center justify-center hidden lg:flex bg-white text-[#FF4400] font-medium uppercase text-[16px] leading-none font-mono tracking-[-0.02em] border border-[#FF4400]/50 hover:bg-[#FF4400] hover:text-white transition-all duration-300 opacity-100 pointer-events-auto"
+          >
+            <span className="mt-px">Coming Soon</span>
+          </Link>
+
+          {/* Mobile menu toggle */}
+          <div className="lg:hidden relative z-[54]">
+            <button
+              onClick={() => setMobileOpen(!mobileOpen)}
+              className="pointer-events-auto relative rounded bg-black size-[32px] p-1 flex items-center justify-center transition-all duration-300 border border-white/20"
+              aria-label={mobileOpen ? "Close menu" : "Open menu"}
+              aria-expanded={mobileOpen}
+            >
+              {mobileOpen ? (
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round">
+                  <line x1="6" y1="6" x2="18" y2="18" />
+                  <line x1="18" y1="6" x2="6" y2="18" />
+                </svg>
+              ) : (
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round">
+                  <line x1="3" y1="6" x2="21" y2="6" />
+                  <line x1="3" y1="12" x2="21" y2="12" />
+                  <line x1="3" y1="18" x2="21" y2="18" />
+                </svg>
+              )}
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* Mobile Menu Overlay */}
       <div
-        className="navbar-mobile-backdrop"
-        onClick={() => setMobileOpen(false)}
+        className="lg:hidden"
         style={{
-          display: "none",
           position: "fixed",
-          inset: 0,
-          zIndex: 49,
-          background: "rgba(14, 42, 53, 0.18)",
-          backdropFilter: "blur(6px)",
-          WebkitBackdropFilter: "blur(6px)",
-          opacity: mobileOpen ? 1 : 0,
+          top: "100px",
+          left: 0,
+          right: 0,
+          bottom: 0,
+          zIndex: 40,
+          background: "linear-gradient(135deg, #0A0A0A 0%, #1A1A1A 58%, #2D2D2D 100%)",
+          transform: mobileOpen ? "translateX(0)" : "translateX(100%)",
+          transition: "transform 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94)",
+          display: "flex",
+          flexDirection: "column",
+          padding: "32px",
+          overflowY: "auto",
           pointerEvents: mobileOpen ? "auto" : "none",
-          transition: "opacity 0.35s ease",
         }}
-      />
-
-      {/* ---- Unified glass navbar ---- */}
-      <nav
-        style={{
-          position: "fixed",
-          top: "16px",
-          left: "50%",
-          width: "min(92vw, 1120px)",
-          transform: "translateX(-50%)",
-          zIndex: 50,
-          borderRadius: mobileOpen ? "24px" : "9999px",
-          transition: `border-radius 0s ${mobileOpen ? "0s" : "0.65s"}`,
-          backdropFilter: "blur(20px) saturate(180%)",
-          WebkitBackdropFilter: "blur(20px) saturate(180%)",
-          background: "rgba(252, 252, 255, 0.64)",
-          border: "1px solid var(--color-border)",
-          boxShadow:
-            "0 18px 44px rgba(14, 42, 53, 0.16), inset 1px 1px 0 rgba(252, 252, 255, 0.78)",
-          fontFamily:
-            "var(--font-nav), system-ui, -apple-system, sans-serif",
-          overflow: "hidden",
-        }}
-        aria-label="Main navigation"
       >
-        {/* ---- Top bar (always visible) ---- */}
         <div
           style={{
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            padding: "8px 24px",
+            position: "absolute",
+            inset: 0,
+            opacity: 0.04,
+            pointerEvents: "none",
+            backgroundImage: `url('/noise-grain.svg')`,
+            backgroundRepeat: "repeat",
+            backgroundSize: "200px 200px",
+            mixBlendMode: "overlay",
           }}
-        >
-          {/* Logo — left */}
-          <a
-            href="#"
-            style={{ textDecoration: "none", flexShrink: 0 }}
-            aria-label="Homepage"
-          >
-            {logo}
-          </a>
+        />
 
-          {/* Desktop: Nav Links — center */}
+        <nav style={{ position: "relative", zIndex: 1 }}>
           <ul
-            className="navbar-desktop-links"
             role="list"
             style={{
-              alignItems: "center",
-              gap: "6px",
               listStyle: "none",
               margin: 0,
               padding: 0,
+              display: "flex",
+              flexDirection: "column",
+              gap: "32px",
             }}
           >
             {links.map((link) => (
               <li key={link.label}>
-                <NavTextLink href={link.href} label={link.label} />
+                <Link
+                  href={link.href}
+                  onClick={() => setMobileOpen(false)}
+                  className="block text-[#B3B3B3] hover:text-white text-[24px] font-mono font-medium tracking-[0.02em] uppercase transition-colors duration-200"
+                >
+                  {link.label}
+                </Link>
               </li>
             ))}
           </ul>
+        </nav>
 
-          {/* Desktop: CTA — right */}
-          <div className="navbar-desktop-cta" style={{ flexShrink: 0 }}>
-            {cta}
-          </div>
-
-          {/* Mobile: Hamburger / Close button */}
-          <button
-            className="navbar-hamburger"
-            type="button"
-            onClick={() => setMobileOpen((prev) => !prev)}
-            aria-label={mobileOpen ? "Close menu" : "Open menu"}
-            style={{
-              alignItems: "center",
-              justifyContent: "center",
-              width: "40px",
-              height: "40px",
-              background: "transparent",
-              border: "none",
-              cursor: "pointer",
-              padding: 0,
-            }}
+        <div style={{ marginTop: "48px", position: "relative", zIndex: 1 }}>
+          <Link
+            target="_blank"
+            rel="noopener noreferrer"
+            href="https://github.com/ikarn-dev/offpay"
+            className="rounded-full px-4 h-[43px] w-full flex items-center justify-center bg-white text-[#FF4400] font-medium uppercase text-[16px] leading-none font-mono tracking-[-0.02em] border border-[#FF4400]/50 hover:bg-[#FF4400] hover:text-white transition-all duration-300 opacity-100 pointer-events-auto"
           >
-            {mobileOpen ? (
-              /* × close icon */
-              <svg
-                width="22"
-                height="22"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="var(--color-text)"
-                strokeWidth="2"
-                strokeLinecap="round"
-              >
-                <line x1="6" y1="6" x2="18" y2="18" />
-                <line x1="18" y1="6" x2="6" y2="18" />
-              </svg>
-            ) : (
-              /* ☰ hamburger icon */
-              <svg
-                width="22"
-                height="22"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="var(--color-text)"
-                strokeWidth="2"
-                strokeLinecap="round"
-              >
-                <line x1="3" y1="6" x2="21" y2="6" />
-                <line x1="3" y1="12" x2="21" y2="12" />
-                <line x1="3" y1="18" x2="21" y2="18" />
-              </svg>
-            )}
-          </button>
+            <span className="mt-px">Coming Soon</span>
+          </Link>
         </div>
-
-        {/* ---- Mobile dropdown (slides down from navbar) ---- */}
-        <div
-          className="navbar-mobile-dropdown"
-          style={{
-            display: "none",
-            maxHeight: mobileOpen ? "600px" : "0px",
-            opacity: mobileOpen ? 1 : 0,
-            overflow: "hidden",
-            transition:
-              "max-height 0.65s cubic-bezier(0.25, 0.46, 0.45, 0.94), opacity 0.4s ease",
-          }}
-        >
-          {/* Divider */}
-          <div
-            style={{
-              height: "1px",
-              background: "rgba(14, 42, 53, 0.1)",
-              margin: "0 24px",
-            }}
-          />
-
-          {/* Nav rows */}
-          <div style={{ padding: "8px 24px 0" }}>
-            {links.map((link) => (
-              <a
-                key={link.label}
-                href={link.href}
-                onClick={() => setMobileOpen(false)}
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "flex-start",
-                  padding: "18px 0",
-                  borderBottom: "1px solid rgba(14, 42, 53, 0.08)",
-                  textDecoration: "none",
-                  color: "var(--color-text)",
-                  fontSize: "14px",
-                  fontFamily: "var(--font-nav)",
-                  fontWeight: 600,
-                  letterSpacing: "0",
-                  textTransform: "uppercase",
-                }}
-              >
-                <span>{link.label}</span>
-              </a>
-            ))}
-          </div>
-
-          {/* CTA buttons */}
-          <div
-            style={{
-              padding: "20px 24px 24px",
-              display: "flex",
-              flexDirection: "column",
-              gap: "10px",
-            }}
-          >
-            <NavCtaButton
-              label="Coming soon"
-              variant="primary"
-              onClick={() => setMobileOpen(false)}
-            />
-          </div>
-        </div>
-      </nav>
-    </>
-  );
-}
-
-/* ------------------------------------------------------------------ */
-/* Plain text nav link with hover effect (desktop only)                */
-/* ------------------------------------------------------------------ */
-
-function NavTextLink({ href, label }: { href: string; label: string }) {
-  const [hovered, setHovered] = useState(false);
-
-  return (
-    <a
-      href={href}
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
-      style={{
-        position: "relative",
-        display: "inline-block",
-        padding: "8px 12px",
-        textDecoration: "none",
-        color: hovered ? "var(--color-text)" : "var(--color-text-muted)",
-        fontSize: "14px",
-        fontFamily: "var(--font-nav)",
-        fontWeight: 500,
-        transition: "color 0.3s var(--ease-out)",
-        cursor: "pointer",
-        whiteSpace: "nowrap",
-      }}
-    >
-      <span style={{ position: "relative", zIndex: 1 }}>{label}</span>
-      <span
-        style={{
-          position: "absolute",
-          left: "12px",
-          right: "12px",
-          bottom: "6px",
-          height: "1px",
-          background: "linear-gradient(90deg, #2EAED2, #5BC8E8)",
-          transform: hovered ? "scaleX(1)" : "scaleX(0)",
-          transformOrigin: "bottom left",
-          transition: "transform 0.4s var(--ease-out)",
-        }}
-      />
-    </a>
+      </div>
+    </header>
   );
 }
