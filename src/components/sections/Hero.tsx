@@ -11,11 +11,10 @@ import WaitlistCard from "./WaitlistCard";
 export default function Hero() {
   return (
     <section
-      className="relative flex flex-col items-center justify-center overflow-hidden bg-[#0A0A0A]"
+      className="relative flex flex-col items-center justify-center overflow-hidden bg-[#0A0A0A] w-full h-screen h-[100vh] h-[100dvh]"
       style={{
-        height: "100vh", // Fixed height to prevent scroll
-        paddingTop: "120px", // Increased to bring content lower
-        paddingBottom: "40px", // Minimal bottom padding
+        paddingTop: "clamp(90px, 16vh, 160px)",
+        paddingBottom: "12px",
       }}
     >
       <WaveBackground />
@@ -29,16 +28,16 @@ export default function Hero() {
         />
       </div>
 
-      <div className="relative z-10 text-center px-6 max-w-4xl mx-auto w-full mt-12 sm:mt-16">
+      <div className="relative z-10 flex flex-col items-center justify-center text-center px-4 max-w-4xl mx-auto w-full h-full">
 
         {/* Headline */}
         <h1
-          className="mb-6 sm:mb-8 text-white relative z-10"
+          className="mb-4 sm:mb-6 text-white"
           style={{
             fontFamily: "var(--font-migra), serif",
-            fontSize: "clamp(32px, 6vw, 60px)",
+            fontSize: "clamp(28px, 5vw, 48px)",
             fontWeight: 400,
-            lineHeight: 1.05,
+            lineHeight: 1.1,
             letterSpacing: "-0.03em",
             color: "#FFFFFF",
           }}
@@ -50,11 +49,12 @@ export default function Hero() {
 
         {/* Subheadline */}
         <p
+          className="mb-5 sm:mb-6"
           style={{
             fontFamily: "var(--font-modernera), monospace",
-            fontSize: "clamp(12px, 1.5vw, 14px)", // slightly smaller to ensure single line fit
+            fontSize: "clamp(11px, 1.2vw, 13px)",
             fontWeight: 500,
-            lineHeight: 1.6,
+            lineHeight: 1.4,
             letterSpacing: "0.05em",
             textTransform: "uppercase",
             color: "#8F8F8F",
@@ -65,10 +65,12 @@ export default function Hero() {
           Privacy-First • Offline-Ready • AI Assistant • Fast Swaps
         </p>
 
-        <WaitlistCard />
+        <div className="w-full max-w-[320px] sm:max-w-[420px]">
+          <WaitlistCard />
+        </div>
 
-        {/* Social Link */}
-        <div className="mt-6 flex justify-center pointer-events-auto relative z-20">
+        {/* Social Link — positioned absolutely at the bottom to save vertical height */}
+        <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex justify-center pointer-events-auto z-20">
           <a
             href="https://x.com/OffPaySolana"
             target="_blank"

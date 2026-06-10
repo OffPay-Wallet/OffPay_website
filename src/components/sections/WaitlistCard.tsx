@@ -58,7 +58,7 @@ export default function WaitlistCard() {
       setTimeout(() => {
         setStatus("idle");
         setEmail("");
-      }, 3000);
+      }, 6000); // Wait 6 seconds so user has time to view the success message
     }, 1000);
   }
 
@@ -70,7 +70,7 @@ export default function WaitlistCard() {
   }
 
   return (
-    <div className="w-full max-w-md mx-auto mt-8 sm:mt-10">
+    <div className="w-full max-w-md mx-auto mt-4 sm:mt-5">
       {/* Outer wrapper for the animated border beam */}
       <div className="relative rounded-[33px]">
 
@@ -102,7 +102,10 @@ export default function WaitlistCard() {
 
         {/* Card content — above the beam, isolate stacking context */}
         <div
-          className="relative p-6 sm:p-8 rounded-[32px] flex flex-col items-start text-left"
+          className={[
+            "relative p-5 sm:p-6 rounded-[32px] flex flex-col transition-all duration-500 min-h-[200px] sm:min-h-[250px]",
+            status === "success" ? "items-center text-center justify-center" : "items-start text-left justify-start"
+          ].join(" ")}
           style={{
             background: "rgba(255, 255, 255, 0.03)",
             border: "1px solid rgba(255, 255, 255, 0.03)",
@@ -111,159 +114,234 @@ export default function WaitlistCard() {
             isolation: "isolate",
           }}
         >
-          {/* Avatars */}
-          <div className="flex items-center mb-6">
-            <div className="flex items-center">
-              <div className="w-8 h-8 rounded-[8px] flex items-center justify-center overflow-hidden p-1 bg-[#242424]">
-                <AppIcon className="w-full h-full text-white" />
+          {/* Card Form — visible when NOT success */}
+          <div
+            className={[
+              "w-full flex flex-col items-start text-left transition-all duration-500",
+              status === "success"
+                ? "opacity-0 scale-95 pointer-events-none absolute inset-x-0 px-5 sm:px-6"
+                : "opacity-100 scale-100",
+            ].join(" ")}
+          >
+            {/* Avatars */}
+            <div className="flex items-center mb-5 sm:mb-6">
+              <div className="flex items-center">
+                <div className="w-8 h-8 rounded-[8px] flex items-center justify-center overflow-hidden p-1 bg-[#242424]">
+                  <AppIcon className="w-full h-full text-white" />
+                </div>
+                <div className="w-8 h-8 rounded-[8px] -ml-3 flex items-center justify-center overflow-hidden p-1 bg-[#2a2a2a]">
+                  <AppIcon className="w-full h-full text-white" />
+                </div>
+                <div className="w-8 h-8 rounded-[8px] -ml-3 flex items-center justify-center overflow-hidden p-1 bg-[#333333]">
+                  <AppIcon className="w-full h-full text-white" />
+                </div>
               </div>
-              <div className="w-8 h-8 rounded-[8px] -ml-3 flex items-center justify-center overflow-hidden p-1 bg-[#2a2a2a]">
-                <AppIcon className="w-full h-full text-white" />
-              </div>
-              <div className="w-8 h-8 rounded-[8px] -ml-3 flex items-center justify-center overflow-hidden p-1 bg-[#333333]">
-                <AppIcon className="w-full h-full text-white" />
+              <span className="ml-3 text-sm font-medium text-[#8F8F8F] font-mono tracking-wide">
+                +2K
+              </span>
+            </div>
+
+            {/* Heading */}
+            <h2
+              className="text-2xl font-medium mb-1.5 sm:mb-2 text-white"
+              style={{
+                fontFamily: "var(--font-migra), serif",
+                letterSpacing: "-0.02em",
+              }}
+            >
+              Join the waitlist
+            </h2>
+
+            {/* Subtitle */}
+            <p
+              className="text-[14px] sm:text-[15px] mb-5 sm:mb-8 text-[#8F8F8F]"
+              style={{ fontFamily: "var(--font-modernera), monospace" }}
+            >
+              Sign up to be one of the first to use OffPay.
+            </p>
+
+            {/* Email input + button — NO form, NO overlays */}
+            <div
+              className="flex flex-col sm:flex-row items-stretch sm:items-center w-full p-2 sm:p-1.5 rounded-[24px] sm:rounded-full transition-all duration-300 gap-2 sm:gap-0"
+              style={{
+                background: "rgba(255, 255, 255, 0.04)",
+                border: shake
+                  ? "1px solid rgba(255, 80, 80, 0.5)"
+                  : "1px solid rgba(255, 255, 255, 0.08)",
+                animation: shake ? "headShake 0.5s ease-in-out" : "none",
+              }}
+            >
+              <input
+                ref={inputRef}
+                type="text"
+                value={email}
+                onChange={(e) => {
+                  setEmail(e.target.value);
+                  if (error) setError(null);
+                }}
+                onKeyDown={onInputKeyDown}
+                placeholder="Enter your email..."
+                disabled={status !== "idle"}
+                className="flex-1 min-w-0 bg-transparent border-none outline-none text-white px-4 py-3 sm:py-2 text-[13px] sm:text-[14px] placeholder-white/30 disabled:opacity-50"
+                style={{ fontFamily: "var(--font-modernera), monospace" }}
+              />
+
+              <button
+                type="button"
+                onClick={onButtonClick}
+                disabled={status !== "idle"}
+                className={[
+                  "rounded-full px-4 sm:px-4 py-[12px] sm:py-[8.5px]",
+                  "flex items-center justify-center",
+                  "font-medium text-[13px] sm:text-[14px] leading-none",
+                  "font-mono tracking-[-0.02em]",
+                  "transition-all duration-300",
+                  "whitespace-nowrap w-full sm:w-auto sm:min-w-[115px]",
+                  "cursor-pointer select-none",
+                  status === "success"
+                    ? "bg-white text-black scale-105"
+                    : status === "loading"
+                    ? "bg-white/20 text-white cursor-wait"
+                    : "bg-white text-black hover:bg-[#E5E5E5] hover:scale-105 active:scale-95",
+                ].join(" ")}
+              >
+                {status === "idle" && (
+                  <>
+                    Get Notified
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      className="w-4 h-4 ml-1.5 -mr-1"
+                    >
+                      <path d="M5 12h14M12 5l7 7-7 7" />
+                    </svg>
+                  </>
+                )}
+
+                {status === "loading" && (
+                  <>
+                    <svg
+                      className="animate-spin -ml-1 mr-2 h-4 w-4 text-current"
+                      xmlns="http://www.w3.org/2000/svg"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                    >
+                      <circle
+                        className="opacity-25"
+                        cx="12"
+                        cy="12"
+                        r="10"
+                        stroke="currentColor"
+                        strokeWidth="4"
+                      />
+                      <path
+                        className="opacity-75"
+                        fill="currentColor"
+                        d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                      />
+                    </svg>
+                    Sending...
+                  </>
+                )}
+
+                {status === "success" && (
+                  <span className="flex items-center">
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      className="h-4 w-4 mr-1.5"
+                      viewBox="0 0 20 20"
+                      fill="currentColor"
+                    >
+                      <path
+                        fillRule="evenodd"
+                        d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
+                        clipRule="evenodd"
+                      />
+                    </svg>
+                    Added!
+                  </span>
+                )}
+              </button>
+            </div>
+
+            {error && (
+              <p
+                className="text-[#FF5050] text-[13px] mt-3.5 px-2.5 font-mono tracking-tight"
+              >
+                {error}
+              </p>
+            )}
+          </div>
+
+          {/* Success Content — visible when success */}
+          <div
+            className={[
+              "w-full flex flex-col items-center justify-center text-center transition-all duration-500",
+              status === "success"
+                ? "opacity-100 scale-100"
+                : "opacity-0 scale-95 pointer-events-none absolute inset-x-0 px-5 sm:px-7",
+            ].join(" ")}
+          >
+            {/* Success Checkmark Icon */}
+            <div className="relative mb-3 flex items-center justify-center">
+              {/* Soft glow behind the checkmark */}
+              <div className="absolute w-20 h-20 rounded-full bg-white/5 blur-xl pointer-events-none" />
+              {/* App Icon Shape Squircle */}
+              <div className="w-14 h-14 rounded-[16px] bg-white text-black flex items-center justify-center shadow-lg border border-white/10">
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="3.5"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  className="w-6 h-6 text-black"
+                >
+                  <polyline points="20 6 9 17 4 12" />
+                </svg>
               </div>
             </div>
-            <span className="ml-3 text-sm font-medium text-[#8F8F8F] font-mono tracking-wide">
-              +2K
-            </span>
-          </div>
 
-          {/* Heading */}
-          <h2
-            className="text-2xl font-medium mb-2 text-white"
-            style={{
-              fontFamily: "var(--font-migra), serif",
-              letterSpacing: "-0.02em",
-            }}
-          >
-            Join the waitlist
-          </h2>
-
-          {/* Subtitle */}
-          <p
-            className="text-[14px] sm:text-[15px] mb-6 sm:mb-8 text-[#8F8F8F]"
-            style={{ fontFamily: "var(--font-modernera), monospace" }}
-          >
-            Sign up to be one of the first to use OffPay.
-          </p>
-
-          {/* Email input + button — NO form, NO overlays */}
-          <div
-            className="flex items-center w-full p-1.5 rounded-full transition-all duration-300"
-            style={{
-              background: "rgba(255, 255, 255, 0.04)",
-              border: shake
-                ? "1px solid rgba(255, 80, 80, 0.5)"
-                : "1px solid rgba(255, 255, 255, 0.08)",
-              animation: shake ? "headShake 0.5s ease-in-out" : "none",
-            }}
-          >
-            <input
-              ref={inputRef}
-              type="text"
-              value={email}
-              onChange={(e) => {
-                setEmail(e.target.value);
-                if (error) setError(null);
+            {/* Success Headline */}
+            <h2
+              className="text-2xl font-medium mb-2 text-white max-w-[280px]"
+              style={{
+                fontFamily: "var(--font-migra), serif",
+                letterSpacing: "-0.02em",
+                lineHeight: 1.15
               }}
-              onKeyDown={onInputKeyDown}
-              placeholder="Enter your email..."
-              disabled={status !== "idle"}
-              className="flex-1 min-w-0 bg-transparent border-none outline-none text-white px-3 sm:px-4 py-2 text-[14px] sm:text-[15px] placeholder-white/30 disabled:opacity-50"
-              style={{ fontFamily: "var(--font-modernera), monospace" }}
-            />
-
-            <button
-              type="button"
-              onClick={onButtonClick}
-              disabled={status !== "idle"}
-              className={[
-                "rounded-full px-4 sm:px-5 py-[10px]",
-                "flex items-center justify-center",
-                "font-medium text-[14px] sm:text-[15px] leading-none",
-                "font-mono tracking-[-0.02em]",
-                "transition-all duration-300",
-                "whitespace-nowrap flex-shrink-0 min-w-[140px]",
-                "cursor-pointer select-none",
-                status === "success"
-                  ? "bg-green-500 text-black scale-105"
-                  : status === "loading"
-                  ? "bg-white/20 text-white cursor-wait"
-                  : "bg-white text-black hover:bg-[#E5E5E5] hover:scale-105 active:scale-95",
-              ].join(" ")}
             >
-              {status === "idle" && (
-                <>
-                  Get Notified
-                  <svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    className="w-4 h-4 ml-1.5 -mr-1"
-                  >
-                    <path d="M5 12h14M12 5l7 7-7 7" />
-                  </svg>
-                </>
-              )}
+              You have been added to our waitlist!
+            </h2>
 
-              {status === "loading" && (
-                <>
-                  <svg
-                    className="animate-spin -ml-1 mr-2 h-4 w-4 text-current"
-                    xmlns="http://www.w3.org/2000/svg"
-                    fill="none"
-                    viewBox="0 0 24 24"
-                  >
-                    <circle
-                      className="opacity-25"
-                      cx="12"
-                      cy="12"
-                      r="10"
-                      stroke="currentColor"
-                      strokeWidth="4"
-                    />
-                    <path
-                      className="opacity-75"
-                      fill="currentColor"
-                      d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                    />
-                  </svg>
-                  Sending...
-                </>
-              )}
-
-              {status === "success" && (
-                <span className="flex items-center">
-                  <svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    className="h-4 w-4 mr-1.5"
-                    viewBox="0 0 20 20"
-                    fill="currentColor"
-                  >
-                    <path
-                      fillRule="evenodd"
-                      d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
-                      clipRule="evenodd"
-                    />
-                  </svg>
-                  Added!
-                </span>
-              )}
-            </button>
-          </div>
-
-          {error && (
+            {/* Success Subheadline */}
             <p
-              className="text-[#FF5050] text-[13px] mt-3.5 px-2.5 font-mono tracking-tight"
+              className="text-[13px] sm:text-[14px] text-[#8F8F8F] leading-relaxed max-w-[260px] mb-4"
+              style={{ fontFamily: "var(--font-modernera), monospace" }}
             >
-              {error}
+              Thank you for joining, you'll be the first to know when we are ready!
             </p>
-          )}
+
+            {/* Social proof / Avatars */}
+            <div className="flex flex-col items-center gap-1.5">
+              <div className="flex items-center">
+                <div className="w-6 h-6 rounded-full border border-black bg-gradient-to-tr from-zinc-800 to-zinc-700 flex items-center justify-center text-[9px] font-mono text-zinc-300 font-bold">A</div>
+                <div className="w-6 h-6 rounded-full border border-black bg-gradient-to-tr from-zinc-700 to-zinc-600 -ml-2 flex items-center justify-center text-[9px] font-mono text-zinc-300 font-bold">M</div>
+                <div className="w-6 h-6 rounded-full border border-black bg-gradient-to-tr from-zinc-600 to-zinc-500 -ml-2 flex items-center justify-center text-[9px] font-mono text-zinc-300 font-bold">J</div>
+                <div className="w-6 h-6 rounded-full border border-black bg-gradient-to-tr from-zinc-500 to-zinc-400 -ml-2 flex items-center justify-center text-[9px] font-mono text-zinc-300 font-bold">K</div>
+                <div className="w-6 h-6 rounded-full border border-black bg-gradient-to-tr from-zinc-400 to-zinc-300 -ml-2 flex items-center justify-center text-[9px] font-mono text-zinc-950 font-bold">L</div>
+              </div>
+              <span className="text-[11px] text-[#8F8F8F] font-mono tracking-tight">
+                You're not alone, <span className="text-white font-medium">1,500+</span> people joined!
+              </span>
+            </div>
+          </div>
         </div>
       </div>
     </div>
