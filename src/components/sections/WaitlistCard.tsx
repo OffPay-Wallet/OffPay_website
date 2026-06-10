@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 
 const ICON_PATH =
   "m55.9 51h-27.2v-2.2h28.5c-0.5-1.1-1.3-1.9-3.4-1.8h-29.3c-3.9-0.1-6 3.1-6 6.5v25.5c0 5.3 3.5 8.8 10.3 8.9h19.5c6.8 0.1 11.5-3.2 11.9-9.1v-23.8c0.1-2.7-1.6-4-4.3-4zm-21.3 19.6h-7.3v-3c0-1.6 1.3-3.5 3.7-3.3 2.1 0.2 3.6 1.7 3.6 3.7v2.6zm16 0h-7.6v-2.8c0-1.9 1.6-3.7 3.8-3.7s3.8 1.6 3.8 3.6v2.9z";
@@ -18,12 +18,26 @@ function AppIcon({ className }: { className?: string }) {
   );
 }
 
+
+
 export default function WaitlistCard() {
   const [email, setEmail] = useState("");
   const [status, setStatus] = useState<"idle" | "loading" | "success">("idle");
   const [error, setError] = useState<string | null>(null);
   const [shake, setShake] = useState(false);
+  const [count, setCount] = useState<number | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    fetch("/api/waitlist")
+      .then((res) => res.json())
+      .then((data) => {
+        if (typeof data.count === "number") {
+          setCount(data.count);
+        }
+      })
+      .catch(() => {});
+  }, []);
 
   function onButtonClick() {
     // If already processing, ignore
@@ -31,35 +45,37 @@ export default function WaitlistCard() {
 
     const cleanEmail = email.trim();
 
-    // Validation with VISIBLE feedback
-    if (!cleanEmail) {
-      setError("Please enter your email address.");
-      setShake(true);
-      inputRef.current?.focus();
-      setTimeout(() => setShake(false), 600);
-      return;
-    }
-
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanEmail)) {
-      setError("Please enter a valid email address (e.g., name@domain.com).");
-      setShake(true);
-      inputRef.current?.focus();
-      setTimeout(() => setShake(false), 600);
-      return;
-    }
-
     setError(null);
     setStatus("loading");
 
-    // Simulate submission
-    setTimeout(() => {
-      setStatus("success");
-      
-      setTimeout(() => {
+    fetch("/api/waitlist", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ email: cleanEmail }),
+    })
+      .then(async (res) => {
+        const data = await res.json();
+        if (data.status === "error") {
+          throw new Error(data.error || "An error occurred. Try again.");
+        }
+        if (typeof data.count === "number") {
+          setCount(data.count);
+        }
+        setStatus("success");
+        setTimeout(() => {
+          setStatus("idle");
+          setEmail("");
+        }, 6000);
+      })
+      .catch((err: any) => {
         setStatus("idle");
-        setEmail("");
-      }, 6000); // Wait 6 seconds so user has time to view the success message
-    }, 1000);
+        setError(err.message || "An error occurred. Try again.");
+        setShake(true);
+        inputRef.current?.focus();
+        setTimeout(() => setShake(false), 600);
+      });
   }
 
   function onInputKeyDown(e: React.KeyboardEvent) {
@@ -123,23 +139,26 @@ export default function WaitlistCard() {
                 : "opacity-100 scale-100",
             ].join(" ")}
           >
+
             {/* Avatars */}
-            <div className="flex items-center mb-5 sm:mb-6">
-              <div className="flex items-center">
-                <div className="w-8 h-8 rounded-[8px] flex items-center justify-center overflow-hidden p-1 bg-[#242424]">
-                  <AppIcon className="w-full h-full text-white" />
+            {count !== null && (
+              <div className="flex items-center mb-4 sm:mb-5 transition-opacity duration-300">
+                <div className="flex items-center">
+                  <div className="w-7 h-7 rounded-[8px] flex items-center justify-center overflow-hidden p-0.5 bg-[#242424] border border-white/5">
+                    <AppIcon className="w-full h-full text-white" />
+                  </div>
+                  <div className="w-7 h-7 rounded-[8px] -ml-2.5 flex items-center justify-center overflow-hidden p-0.5 bg-[#2a2a2a] border border-white/5">
+                    <AppIcon className="w-full h-full text-white" />
+                  </div>
+                  <div className="w-7 h-7 rounded-[8px] -ml-2.5 flex items-center justify-center overflow-hidden p-0.5 bg-[#333333] border border-white/5">
+                    <AppIcon className="w-full h-full text-white" />
+                  </div>
                 </div>
-                <div className="w-8 h-8 rounded-[8px] -ml-3 flex items-center justify-center overflow-hidden p-1 bg-[#2a2a2a]">
-                  <AppIcon className="w-full h-full text-white" />
-                </div>
-                <div className="w-8 h-8 rounded-[8px] -ml-3 flex items-center justify-center overflow-hidden p-1 bg-[#333333]">
-                  <AppIcon className="w-full h-full text-white" />
-                </div>
+                <span className="ml-2.5 text-xs font-semibold text-[#8F8F8F] font-mono tracking-wide">
+                  +{count.toLocaleString()}
+                </span>
               </div>
-              <span className="ml-3 text-sm font-medium text-[#8F8F8F] font-mono tracking-wide">
-                +2K
-              </span>
-            </div>
+            )}
 
             {/* Heading */}
             <h2
@@ -271,7 +290,7 @@ export default function WaitlistCard() {
 
             {error && (
               <p
-                className="text-[#FF5050] text-[13px] mt-3.5 px-2.5 font-mono tracking-tight"
+                className="text-[#FF5050] text-[11px] sm:text-xs mt-3 px-1 tracking-tight font-mono whitespace-nowrap overflow-hidden text-ellipsis w-full"
               >
                 {error}
               </p>
@@ -329,18 +348,20 @@ export default function WaitlistCard() {
             </p>
 
             {/* Social proof / Avatars */}
-            <div className="flex flex-col items-center gap-1.5">
-              <div className="flex items-center">
-                <div className="w-6 h-6 rounded-full border border-black bg-gradient-to-tr from-zinc-800 to-zinc-700 flex items-center justify-center text-[9px] font-mono text-zinc-300 font-bold">A</div>
-                <div className="w-6 h-6 rounded-full border border-black bg-gradient-to-tr from-zinc-700 to-zinc-600 -ml-2 flex items-center justify-center text-[9px] font-mono text-zinc-300 font-bold">M</div>
-                <div className="w-6 h-6 rounded-full border border-black bg-gradient-to-tr from-zinc-600 to-zinc-500 -ml-2 flex items-center justify-center text-[9px] font-mono text-zinc-300 font-bold">J</div>
-                <div className="w-6 h-6 rounded-full border border-black bg-gradient-to-tr from-zinc-500 to-zinc-400 -ml-2 flex items-center justify-center text-[9px] font-mono text-zinc-300 font-bold">K</div>
-                <div className="w-6 h-6 rounded-full border border-black bg-gradient-to-tr from-zinc-400 to-zinc-300 -ml-2 flex items-center justify-center text-[9px] font-mono text-zinc-950 font-bold">L</div>
+            {count !== null && (
+              <div className="flex flex-col items-center gap-1.5 transition-opacity duration-300">
+                <div className="flex items-center">
+                  <div className="w-6 h-6 rounded-full border border-black bg-gradient-to-tr from-zinc-800 to-zinc-700 flex items-center justify-center text-[9px] font-mono text-zinc-300 font-bold">A</div>
+                  <div className="w-6 h-6 rounded-full border border-black bg-gradient-to-tr from-zinc-700 to-zinc-600 -ml-2 flex items-center justify-center text-[9px] font-mono text-zinc-300 font-bold">M</div>
+                  <div className="w-6 h-6 rounded-full border border-black bg-gradient-to-tr from-zinc-600 to-zinc-500 -ml-2 flex items-center justify-center text-[9px] font-mono text-zinc-300 font-bold">J</div>
+                  <div className="w-6 h-6 rounded-full border border-black bg-gradient-to-tr from-zinc-500 to-zinc-400 -ml-2 flex items-center justify-center text-[9px] font-mono text-zinc-300 font-bold">K</div>
+                  <div className="w-6 h-6 rounded-full border border-black bg-gradient-to-tr from-zinc-400 to-zinc-300 -ml-2 flex items-center justify-center text-[9px] font-mono text-zinc-950 font-bold">L</div>
+                </div>
+                <span className="text-[11px] text-[#8F8F8F] font-mono tracking-tight">
+                  You're not alone, <span className="text-white font-medium">{count.toLocaleString()}</span> people joined!
+                </span>
               </div>
-              <span className="text-[11px] text-[#8F8F8F] font-mono tracking-tight">
-                You're not alone, <span className="text-white font-medium">1,500+</span> people joined!
-              </span>
-            </div>
+            )}
           </div>
         </div>
       </div>
