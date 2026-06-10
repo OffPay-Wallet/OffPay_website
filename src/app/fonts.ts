@@ -1,77 +1,61 @@
 /**
- * Font configuration — all local fonts loaded via next/font/local.
+ * Font configuration — now using Google Fonts as fallback since local files are missing.
  *
  * Each font exposes a CSS variable so components can reference them via
  * `var(--font-xxx)` in inline styles or through the design system tokens
  * defined in globals.css.
- *
- * Font files live in public/fonts/. Paths are relative to this file.
  */
 
-import localFont from "next/font/local";
+import { Inter, Bricolage_Grotesque, Schibsted_Grotesk, Space_Grotesk, Playfair_Display } from "next/font/google";
 
 /* ------------------------------------------------------------------ */
 /* Display / Headline fonts                                            */
 /* ------------------------------------------------------------------ */
 
-/** PP Mondwest — dramatic display face for hero headlines */
-export const ppMondwest = localFont({
-  src: "../../public/fonts/Ppmondwest.woff2",
+export const ppMondwest = Playfair_Display({
+  subsets: ["latin"],
   variable: "--font-mondwest",
   display: "swap",
-  weight: "400",
 });
 
-/** PP Migra — elegant serif for accent / secondary headlines */
-export const ppMigra = localFont({
-  src: "../../public/fonts/PP Migra.woff2",
+export const ppMigra = Playfair_Display({
+  subsets: ["latin"],
   variable: "--font-migra",
   display: "swap",
-  weight: "400",
 });
 
-/** Modernera — clean geometric display */
-export const modernera = localFont({
-  src: "../../public/fonts/Modernera.woff2",
+export const modernera = Space_Grotesk({
+  subsets: ["latin"],
   variable: "--font-modernera",
   display: "swap",
-  weight: "400",
 });
 
 /* ------------------------------------------------------------------ */
 /* Body / UI fonts                                                     */
 /* ------------------------------------------------------------------ */
 
-/** TT Commons — versatile workhorse for body & UI elements */
-export const ttCommons = localFont({
-  src: "../../public/fonts/TT Commons.woff2",
+export const ttCommons = Inter({
+  subsets: ["latin"],
   variable: "--font-tt-commons",
   display: "swap",
-  weight: "400",
 });
 
-/** Schibsted Grotesk — crisp grotesk for nav links & labels */
-export const schibstedGrotesk = localFont({
-  src: "../../public/fonts/Schibstedgrotesk.woff2",
+export const schibstedGrotesk = Schibsted_Grotesk({
+  subsets: ["latin"],
   variable: "--font-schibsted",
   display: "swap",
-  weight: "400",
 });
 
-/** Bricolage Grotesque — distinctive rounded grotesk */
-export const bricolageGrotesque = localFont({
-  src: "../../public/fonts/Bricolage Grotesque.woff2",
+export const bricolageGrotesque = Bricolage_Grotesque({
+  subsets: ["latin"],
   variable: "--font-bricolage",
   display: "swap",
-  weight: "400",
 });
 
-/** PP Fraktion Sans — sharp geometric sans */
-export const ppFraktionSans = localFont({
-  src: "../../public/fonts/Ppfraktionsans.woff2",
+export const ppFraktionSans = Space_Grotesk({
+  subsets: ["latin"],
   variable: "--font-fraktion",
   display: "swap",
-  weight: "400",
 });
 
 /* ------------------------------------------------------------------ */
