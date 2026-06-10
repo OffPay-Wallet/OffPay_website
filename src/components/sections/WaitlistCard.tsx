@@ -173,7 +173,7 @@ export default function WaitlistCard() {
 
             {/* Subtitle */}
             <p
-              className="text-[14px] sm:text-[15px] mb-5 sm:mb-8 text-[#8F8F8F]"
+              className="text-[11.5px] xs:text-[12.5px] sm:text-[14px] mb-5 sm:mb-8 text-[#8F8F8F]"
               style={{ fontFamily: "var(--font-modernera), monospace" }}
             >
               Sign up to be one of the first to use OffPay.

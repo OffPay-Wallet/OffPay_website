@@ -52,10 +52,10 @@ export default function Hero() {
           className="mb-5 sm:mb-6"
           style={{
             fontFamily: "var(--font-modernera), monospace",
-            fontSize: "clamp(11px, 1.2vw, 13px)",
+            fontSize: "clamp(9px, 1.5vw, 13px)",
             fontWeight: 500,
             lineHeight: 1.4,
-            letterSpacing: "0.05em",
+            letterSpacing: "0.03em",
             textTransform: "uppercase",
             color: "#8F8F8F",
             maxWidth: "100%",
