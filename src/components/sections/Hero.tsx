@@ -6,6 +6,7 @@
 
 import { useState } from "react";
 import { WaveBackground } from "./WaveBackground";
+import { MeshGradient } from "@paper-design/shaders-react";
 
 export default function Hero() {
   const [email, setEmail] = useState("");
@@ -24,6 +25,15 @@ export default function Hero() {
       }}
     >
       <WaveBackground />
+      <div className="absolute inset-0 z-0 opacity-80 mix-blend-screen pointer-events-none">
+        <MeshGradient
+          colors={['#000000', '#1A1A1A', '#2D2D2D', '#0A0A0A']}
+          distortion={0.5}
+          swirl={0.5}
+          speed={0.1}
+          style={{ width: '100%', height: '100%' }}
+        />
+      </div>
 
       <div
         className="relative z-10 text-center px-6 max-w-4xl mx-auto"
@@ -169,6 +179,32 @@ export default function Hero() {
                 </svg>
               </button>
             </form>
+          </div>
+
+          {/* Social Link */}
+          <div className="absolute top-full left-0 w-full mt-5 flex justify-center pointer-events-auto">
+            <a
+              href="https://x.com/OffPaySolana"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center justify-center w-10 h-10 rounded-full text-[#8F8F8F] hover:text-white hover:bg-[rgba(255,255,255,0.08)] transition-all duration-300"
+              style={{
+                background: "rgba(255, 255, 255, 0.04)",
+                border: "1px solid rgba(255, 255, 255, 0.08)",
+              }}
+              aria-label="Follow on X"
+            >
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                width="24"
+                height="24"
+                viewBox="0 0 24 24"
+                fill="currentColor"
+                className="w-3.5 h-3.5"
+              >
+                <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
+              </svg>
+            </a>
           </div>
         </div>
       </div>

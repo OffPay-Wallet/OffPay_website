@@ -1,13 +1,8 @@
 "use client";
 
-import type { NavLink } from "@/types";
 import NavLogo from "./NavLogo";
 
-export interface NavbarProps {
-  links: NavLink[];
-}
-
-export default function Navbar({ }: NavbarProps) {
+export default function Navbar() {
   return (
     <header className="pointer-events-none fixed top-0 left-0 right-0 w-full font-mono text-white transition-colors duration-300 z-50">
       <div className="pt-0 pb-0 mx-auto max-w-[90rem] px-5 flex w-full items-center justify-between h-[100px]">

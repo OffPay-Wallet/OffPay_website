@@ -1,8 +1,7 @@
 import type { Metadata } from "next";
 import "./globals.css";
-import "lenis/dist/lenis.css";
 import Navbar from "@/components/ui/Navbar";
-import { NAV_LINKS, SITE_NAME, SITE_DESCRIPTION, SITE_URL } from "@/constants";
+import { SITE_NAME, SITE_DESCRIPTION, SITE_URL } from "@/constants";
 import { allFontVariables } from "./fonts";
 
 export const metadata: Metadata = {
@@ -29,7 +28,7 @@ export default function RootLayout({
   return (
     <html lang="en" className={allFontVariables}>
       <body>
-        <Navbar links={NAV_LINKS} />
+        <Navbar />
         {children}
       </body>
     </html>
