@@ -29,22 +29,30 @@ export function middleware(request: NextRequest) {
     "max-age=63072000; includeSubDomains; preload"
   );
 
-  // Production Content-Security-Policy
-  // Scoped to offpay.app — update if adding third-party scripts (analytics, etc.)
+  // Content-Security-Policy
+  // Enable unsafe-eval and websocket connections in development for Next.js hot reload (Fast Refresh)
+  const isDev = process.env.NODE_ENV === "development";
+  const scriptSrc = isDev 
+    ? "script-src 'self' 'unsafe-inline' 'unsafe-eval'" 
+    : "script-src 'self' 'unsafe-inline'";
+  const connectSrc = isDev
+    ? "connect-src 'self' ws: wss: http://localhost:* https://localhost:* http://127.0.0.1:* https://127.0.0.1:* https://www.offpay.app https://offpay.app https://vitals.vercel-insights.com"
+    : "connect-src 'self' https://www.offpay.app https://offpay.app https://vitals.vercel-insights.com";
+
   response.headers.set(
     "Content-Security-Policy",
     [
       "default-src 'self'",
-      "script-src 'self' 'unsafe-inline'",
+      scriptSrc,
       "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
       "font-src 'self' https://fonts.gstatic.com data:",
       "img-src 'self' data: blob: https:",
       "media-src 'self' blob: https:",
-      "connect-src 'self' https://www.offpay.app https://offpay.app https://vitals.vercel-insights.com",
+      connectSrc,
       "frame-ancestors 'none'",
       "base-uri 'self'",
       "form-action 'self'",
-      "upgrade-insecure-requests",
+      ...(isDev ? [] : ["upgrade-insecure-requests"]),
     ].join("; ")
   );
 
