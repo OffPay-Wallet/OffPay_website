@@ -4,7 +4,7 @@ import type { Collection } from "mongodb";
 import {
   WAITLIST_RATE_LIMIT_WINDOW_MS,
   WaitlistRateLimitError,
-  enforceRateLimit,
+  enforceWaitlistRegistrationLimit,
   ensureWaitlistIndexes,
   getClientIp,
   getEmailValidationError,
@@ -13,63 +13,44 @@ import {
   normalizeEmail,
   sanitizeHeaderValue,
   type WaitlistEntry,
-  type WaitlistRateLimitDocument,
 } from "../waitlist-security";
 
-class InMemoryRateLimitCollection {
-  private documents = new Map<string, WaitlistRateLimitDocument>();
+class InMemoryWaitlistCollection {
+  constructor(private documents: WaitlistEntry[] = []) {}
 
-  async findOneAndUpdate(
-    filter: Pick<WaitlistRateLimitDocument, "scope" | "key" | "windowStart">,
-    update: {
-      $inc: { attempts: number };
-      $setOnInsert: Pick<
-        WaitlistRateLimitDocument,
-        "scope" | "key" | "windowStart" | "expiresAt"
-      >;
-    }
-  ) {
-    const documentKey = [
-      filter.scope,
-      filter.key,
-      filter.windowStart.toISOString(),
-    ].join(":");
-    const existing = this.documents.get(documentKey);
-    const document: WaitlistRateLimitDocument = existing ?? {
-      ...update.$setOnInsert,
-      attempts: 0,
-    };
-
-    document.attempts += update.$inc.attempts;
-    this.documents.set(documentKey, document);
-
-    return { ...document };
+  async countDocuments(filter: {
+    ip: string;
+    createdAt: { $gte: Date };
+  }) {
+    return this.documents.filter(
+      (document) =>
+        document.ip === filter.ip &&
+        document.createdAt.getTime() >= filter.createdAt.$gte.getTime()
+    ).length;
   }
 }
 
-test("enforceRateLimit blocks attempts above the configured window limit", async () => {
-  const collection =
-    new InMemoryRateLimitCollection() as unknown as Collection<WaitlistRateLimitDocument>;
+test("enforceWaitlistRegistrationLimit blocks above recent successful registrations", async () => {
   const now = new Date("2026-06-22T06:00:00.000Z");
-
-  await enforceRateLimit(collection, {
-    scope: "ip",
-    key: "198.51.100.10",
-    limit: 2,
-    now,
-  });
-  await enforceRateLimit(collection, {
-    scope: "ip",
-    key: "198.51.100.10",
-    limit: 2,
-    now,
-  });
+  const collection = new InMemoryWaitlistCollection([
+    {
+      email: "first@example.com",
+      createdAt: now,
+      ip: "198.51.100.10",
+      userAgent: "node-test",
+    },
+    {
+      email: "second@example.com",
+      createdAt: now,
+      ip: "198.51.100.10",
+      userAgent: "node-test",
+    },
+  ]) as unknown as Collection<WaitlistEntry>;
 
   await assert.rejects(
     () =>
-      enforceRateLimit(collection, {
-        scope: "ip",
-        key: "198.51.100.10",
+      enforceWaitlistRegistrationLimit(collection, {
+        ip: "198.51.100.10",
         limit: 2,
         now,
       }),
@@ -79,22 +60,21 @@ test("enforceRateLimit blocks attempts above the configured window limit", async
   );
 });
 
-test("enforceRateLimit starts a fresh bucket in the next window", async () => {
-  const collection =
-    new InMemoryRateLimitCollection() as unknown as Collection<WaitlistRateLimitDocument>;
+test("enforceWaitlistRegistrationLimit ignores older successful registrations", async () => {
   const now = new Date("2026-06-22T06:00:00.000Z");
+  const collection = new InMemoryWaitlistCollection([
+    {
+      email: "old@example.com",
+      createdAt: new Date(now.getTime() - WAITLIST_RATE_LIMIT_WINDOW_MS),
+      ip: "198.51.100.10",
+      userAgent: "node-test",
+    },
+  ]) as unknown as Collection<WaitlistEntry>;
 
-  await enforceRateLimit(collection, {
-    scope: "email",
-    key: "test@example.com",
+  await enforceWaitlistRegistrationLimit(collection, {
+    ip: "198.51.100.10",
     limit: 1,
     now,
-  });
-  await enforceRateLimit(collection, {
-    scope: "email",
-    key: "test@example.com",
-    limit: 1,
-    now: new Date(now.getTime() + WAITLIST_RATE_LIMIT_WINDOW_MS),
   });
 });
 
@@ -104,12 +84,8 @@ test("ensureWaitlistIndexes propagates index creation failures", async () => {
       throw new Error("index denied");
     },
   } as unknown as Collection<WaitlistEntry>;
-  const rateLimitCollection = {
-    createIndex: async () => "created",
-  } as unknown as Collection<WaitlistRateLimitDocument>;
-
   await assert.rejects(
-    () => ensureWaitlistIndexes(failingWaitlistCollection, rateLimitCollection),
+    () => ensureWaitlistIndexes(failingWaitlistCollection),
     /index denied/
   );
 });

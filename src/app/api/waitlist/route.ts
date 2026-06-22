@@ -2,9 +2,8 @@ import { NextResponse } from "next/server";
 import { getMongoClient } from "@/lib/mongodb";
 import { getWaitlistCount } from "@/lib/waitlist-count";
 import {
-  WAITLIST_RATE_LIMIT_COLLECTION,
   WaitlistRateLimitError,
-  enforceWaitlistRateLimits,
+  enforceWaitlistRegistrationLimit,
   ensureWaitlistIndexes,
   getClientIp,
   getEmailValidationError,
@@ -12,7 +11,6 @@ import {
   insertUniqueWaitlistEntry,
   normalizeEmail,
   type WaitlistEntry,
-  type WaitlistRateLimitDocument,
 } from "@/lib/waitlist-security";
 
 function waitlistError(
@@ -83,17 +81,31 @@ export async function POST(request: Request) {
     const dbName = process.env.MONGODB_DB || "offpay";
     const db = client.db(dbName);
     const collection = db.collection<WaitlistEntry>("waitlist");
-    const rateLimitCollection = db.collection<WaitlistRateLimitDocument>(
-      WAITLIST_RATE_LIMIT_COLLECTION
-    );
 
-    // Fail closed if the database cannot enforce unique emails or rate-limit buckets.
-    await ensureWaitlistIndexes(collection, rateLimitCollection);
+    // Fail closed if the database cannot enforce unique emails and indexed IP limits.
+    await ensureWaitlistIndexes(collection);
+
+    const existingEntry = await collection.findOne(
+      { email: cleanedEmail },
+      { projection: { _id: 1 } }
+    );
+    if (existingEntry) {
+      const count = await collection.countDocuments().catch(() => 0);
+
+      return NextResponse.json(
+        {
+          status: "success",
+          code: "already_registered",
+          message: "You're on the waitlist.",
+          count,
+        },
+        { status: 200 }
+      );
+    }
 
     try {
-      await enforceWaitlistRateLimits(rateLimitCollection, {
+      await enforceWaitlistRegistrationLimit(collection, {
         ip,
-        email: cleanedEmail,
       });
     } catch (error: unknown) {
       if (error instanceof WaitlistRateLimitError) {
