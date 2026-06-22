@@ -81,6 +81,9 @@ test("enforceWaitlistRegistrationLimit ignores older successful registrations", 
 test("ensureWaitlistIndexes propagates index creation failures", async () => {
   const failingWaitlistCollection = {
     indexes: async () => [],
+    aggregate: () => ({
+      toArray: async () => [],
+    }),
     createIndex: async () => {
       throw new Error("index denied");
     },
@@ -109,18 +112,52 @@ test("ensureWaitlistIndexes accepts an existing unique email index with any name
   assert.equal(createIndexCalls, 1);
 });
 
-test("ensureWaitlistIndexes rejects an existing non-unique email index", async () => {
+test("ensureWaitlistIndexes repairs duplicates and replaces a non-unique email index", async () => {
+  const droppedIndexes: string[] = [];
+  const createdIndexes: Array<{
+    key: Record<string, number>;
+    options?: Record<string, unknown>;
+  }> = [];
+  const deletedFilters: Array<Record<string, unknown>> = [];
   const waitlistCollection = {
     indexes: async () => [
       { key: { _id: 1 } },
       { key: { email: 1 }, name: "email_1" },
     ],
-    createIndex: async () => "created",
+    aggregate: () => ({
+      toArray: async () => [{ duplicateIds: ["duplicate-id"] }],
+    }),
+    deleteMany: async (filter: Record<string, unknown>) => {
+      deletedFilters.push(filter);
+      return { deletedCount: 1 };
+    },
+    dropIndex: async (name: string) => {
+      droppedIndexes.push(name);
+      return { ok: 1 };
+    },
+    createIndex: async (
+      key: Record<string, number>,
+      options?: Record<string, unknown>
+    ) => {
+      createdIndexes.push(options === undefined ? { key } : { key, options });
+      return "created";
+    },
   } as unknown as Collection<WaitlistEntry>;
 
-  await assert.rejects(
-    () => ensureWaitlistIndexes(waitlistCollection),
-    /email index must be unique/
+  await ensureWaitlistIndexes(waitlistCollection);
+
+  assert.deepEqual(deletedFilters, [
+    { _id: { $in: ["duplicate-id"] } },
+  ]);
+  assert.deepEqual(droppedIndexes, ["email_1"]);
+  assert.equal(
+    createdIndexes.some(
+      (index) =>
+        index.key.email === 1 &&
+        index.options?.unique === true &&
+        index.options?.name === "waitlist_email_unique"
+    ),
+    true
   );
 });
 

@@ -4,7 +4,7 @@ const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const MAX_EMAIL_LENGTH = 254;
 const MAX_STORED_IP_LENGTH = 128;
 const MAX_STORED_USER_AGENT_LENGTH = 512;
-const DEFAULT_IP_RATE_LIMIT = 5;
+const DEFAULT_IP_RATE_LIMIT = 1;
 
 export const WAITLIST_RATE_LIMIT_WINDOW_MS = 60 * 60 * 1000;
 export const WAITLIST_IP_RATE_LIMIT = parsePositiveInteger(
@@ -90,6 +90,7 @@ export function getUserAgent(headers: Headers) {
 }
 
 type WaitlistIndexDescription = {
+  name?: string;
   key?: Record<string, number>;
   unique?: boolean;
 };
@@ -109,6 +110,46 @@ function hasIndexKey(
   );
 }
 
+async function deleteDuplicateWaitlistEmails(
+  waitlistCollection: Collection<WaitlistEntry>
+) {
+  const duplicateGroups = await waitlistCollection
+    .aggregate<{ duplicateIds: unknown[] }>([
+      { $sort: { email: 1, createdAt: 1, _id: 1 } },
+      {
+        $group: {
+          _id: "$email",
+          ids: { $push: "$_id" },
+          count: { $sum: 1 },
+        },
+      },
+      {
+        $match: {
+          _id: { $type: "string" },
+          count: { $gt: 1 },
+        },
+      },
+      {
+        $project: {
+          _id: 0,
+          duplicateIds: {
+            $slice: ["$ids", 1, { $subtract: ["$count", 1] }],
+          },
+        },
+      },
+    ])
+    .toArray();
+  const duplicateIds = duplicateGroups.flatMap((group) => group.duplicateIds);
+
+  if (duplicateIds.length > 0) {
+    await waitlistCollection.deleteMany({
+      _id: { $in: duplicateIds },
+    } as Document);
+  }
+
+  return duplicateIds.length;
+}
+
 export async function ensureWaitlistIndexes(
   waitlistCollection: Collection<WaitlistEntry>
 ) {
@@ -118,9 +159,20 @@ export async function ensureWaitlistIndexes(
 
   if (emailIndex) {
     if (emailIndex.unique !== true) {
-      throw new Error("waitlist email index must be unique");
+      await deleteDuplicateWaitlistEmails(waitlistCollection);
+
+      if (!emailIndex.name) {
+        throw new Error("waitlist email index must be named before replacement");
+      }
+
+      await waitlistCollection.dropIndex(emailIndex.name);
+      await waitlistCollection.createIndex(
+        { email: 1 },
+        { unique: true, name: "waitlist_email_unique" }
+      );
     }
   } else {
+    await deleteDuplicateWaitlistEmails(waitlistCollection);
     await waitlistCollection.createIndex(
       { email: 1 },
       { unique: true, name: "waitlist_email_unique" }
