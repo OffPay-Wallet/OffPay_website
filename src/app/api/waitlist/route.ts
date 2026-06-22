@@ -101,6 +101,20 @@ export async function POST(request: Request) {
     await ensureWaitlistRequestLimitIndexes(requestLimitCollection);
 
     const now = new Date();
+    const existingEntry = await collection.findOne(
+      { email: cleanedEmail },
+      { projection: { _id: 1 } }
+    );
+    if (existingEntry) {
+      const count = await collection.countDocuments().catch(() => 0);
+
+      return waitlistError(
+        "already_registered",
+        "This email is already on the waitlist.",
+        { status: 409 },
+        { count }
+      );
+    }
 
     try {
       await enforceWaitlistRequestLimit(requestLimitCollection, {
@@ -117,21 +131,6 @@ export async function POST(request: Request) {
         );
       }
       throw error;
-    }
-
-    const existingEntry = await collection.findOne(
-      { email: cleanedEmail },
-      { projection: { _id: 1 } }
-    );
-    if (existingEntry) {
-      const count = await collection.countDocuments().catch(() => 0);
-
-      return waitlistError(
-        "already_registered",
-        "This email is already on the waitlist.",
-        { status: 409 },
-        { count }
-      );
     }
 
     try {
