@@ -69,9 +69,9 @@ export default function WaitlistCard() {
           setEmail("");
         }, 6000);
       })
-      .catch((err: any) => {
+      .catch((err: unknown) => {
         setStatus("idle");
-        setError(err.message || "An error occurred. Try again.");
+        setError(err instanceof Error ? err.message : "An error occurred. Try again.");
         setShake(true);
         inputRef.current?.focus();
         setTimeout(() => setShake(false), 600);
@@ -344,7 +344,7 @@ export default function WaitlistCard() {
               className="text-[13px] sm:text-[14px] text-[#8F8F8F] leading-relaxed max-w-[260px] mb-4"
               style={{ fontFamily: "var(--font-modernera), monospace" }}
             >
-              Thank you for joining, you'll be the first to know when we are ready!
+              Thank you for joining, you&apos;ll be the first to know when we are ready!
             </p>
 
             {/* Social proof / Avatars */}
@@ -358,7 +358,7 @@ export default function WaitlistCard() {
                   <div className="w-6 h-6 rounded-full border border-black bg-gradient-to-tr from-zinc-400 to-zinc-300 -ml-2 flex items-center justify-center text-[9px] font-mono text-zinc-950 font-bold">L</div>
                 </div>
                 <span className="text-[11px] text-[#8F8F8F] font-mono tracking-tight">
-                  You're not alone, <span className="text-white font-medium">{count.toLocaleString()}</span> people joined!
+                  You&apos;re not alone, <span className="text-white font-medium">{count.toLocaleString()}</span> people joined!
                 </span>
               </div>
             )}
