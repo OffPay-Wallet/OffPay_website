@@ -27,7 +27,7 @@ const nextConfig: NextConfig = {
     ],
   },
 
-  // Fallback security headers (also set via Edge Middleware)
+  // Fallback security headers (also set via Proxy)
   headers: async () => [
     {
       source: "/(.*)",

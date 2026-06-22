@@ -15,6 +15,23 @@ import {
   type WaitlistRateLimitDocument,
 } from "@/lib/waitlist-security";
 
+function waitlistError(
+  code: string,
+  error: string,
+  init: ResponseInit = { status: 200 },
+  extra?: Record<string, unknown>
+) {
+  return NextResponse.json(
+    {
+      status: "error",
+      code,
+      error,
+      ...extra,
+    },
+    init
+  );
+}
+
 export async function GET() {
   const count = await getWaitlistCount();
   return NextResponse.json({ count }, { status: 200 });
@@ -25,9 +42,10 @@ export async function POST(request: Request) {
     // 1. Validate Content-Type
     const contentType = request.headers.get("content-type") || "";
     if (!contentType.includes("application/json")) {
-      return NextResponse.json(
-        { status: "error", error: "Invalid Content-Type. Expected application/json." },
-        { status: 200 }
+      return waitlistError(
+        "invalid_request",
+        "Please submit the form again.",
+        { status: 415 }
       );
     }
 
@@ -36,9 +54,10 @@ export async function POST(request: Request) {
     try {
       body = await request.json();
     } catch {
-      return NextResponse.json(
-        { status: "error", error: "Malformed JSON payload request." },
-        { status: 200 }
+      return waitlistError(
+        "invalid_request",
+        "Please submit the form again.",
+        { status: 400 }
       );
     }
 
@@ -50,10 +69,7 @@ export async function POST(request: Request) {
     // 3. Strict NoSQL Injection check & length check
     const validationError = getEmailValidationError(email);
     if (validationError) {
-      return NextResponse.json(
-        { status: "error", error: validationError },
-        { status: 200 }
-      );
+      return waitlistError("invalid_email", validationError, { status: 400 });
     }
 
     const cleanedEmail = normalizeEmail(email as string);
@@ -81,13 +97,11 @@ export async function POST(request: Request) {
       });
     } catch (error: unknown) {
       if (error instanceof WaitlistRateLimitError) {
-        return NextResponse.json(
-          {
-            status: "error",
-            error: error.message,
-            retryAfterSeconds: error.retryAfterSeconds,
-          },
-          { status: 429 }
+        return waitlistError(
+          "rate_limited",
+          "Too many attempts. Please try again soon.",
+          { status: 429 },
+          { retryAfterSeconds: error.retryAfterSeconds }
         );
       }
       throw error;
@@ -103,8 +117,15 @@ export async function POST(request: Request) {
 
     const insertResult = await insertUniqueWaitlistEntry(collection, newEntry);
     if (insertResult === "duplicate") {
+      const count = await collection.countDocuments().catch(() => 0);
+
       return NextResponse.json(
-        { status: "error", error: "Email is already registered." },
+        {
+          status: "success",
+          code: "already_registered",
+          message: "You're on the waitlist.",
+          count,
+        },
         { status: 200 }
       );
     }
@@ -118,9 +139,10 @@ export async function POST(request: Request) {
 
   } catch {
     // 7. Mask internal database exceptions to prevent details leak
-    return NextResponse.json(
-      { status: "error", error: "An error occurred. Try again." },
-      { status: 200 }
+    return waitlistError(
+      "temporarily_unavailable",
+      "We couldn't add you right now. Please try again in a few minutes.",
+      { status: 503 }
     );
   }
 }

@@ -18,7 +18,46 @@ function AppIcon({ className }: { className?: string }) {
   );
 }
 
+type WaitlistResponse = {
+  status?: "success" | "error";
+  code?: string;
+  error?: string;
+  count?: number;
+  retryAfterSeconds?: number;
+};
 
+function formatRetryAfter(seconds: number) {
+  if (seconds < 60) {
+    return `${seconds}s`;
+  }
+
+  return `${Math.ceil(seconds / 60)}m`;
+}
+
+function getFriendlyWaitlistError(data: WaitlistResponse | null) {
+  if (!data) {
+    return "We couldn't reach the waitlist. Please try again in a moment.";
+  }
+
+  if (data.code === "rate_limited") {
+    const retryAfter =
+      typeof data.retryAfterSeconds === "number"
+        ? ` Try again in ${formatRetryAfter(data.retryAfterSeconds)}.`
+        : "";
+
+    return `Too many attempts.${retryAfter}`;
+  }
+
+  if (data.code === "temporarily_unavailable") {
+    return "We couldn't add you right now. Please try again in a few minutes.";
+  }
+
+  if (data.code === "invalid_email" || data.code === "invalid_request") {
+    return data.error || "Please check your email and try again.";
+  }
+
+  return "We couldn't add you right now. Please try again in a moment.";
+}
 
 export default function WaitlistCard({ initialCount }: { initialCount: number }) {
   const [email, setEmail] = useState("");
@@ -37,7 +76,7 @@ export default function WaitlistCard({ initialCount }: { initialCount: number })
     setError(null);
     setStatus("loading");
 
-    fetch("/api/waitlist", {
+    void fetch("/api/waitlist", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -45,11 +84,19 @@ export default function WaitlistCard({ initialCount }: { initialCount: number })
       body: JSON.stringify({ email: cleanEmail }),
     })
       .then(async (res) => {
-        const data = await res.json();
-        if (data.status === "error") {
-          throw new Error(data.error || "An error occurred. Try again.");
+        let data: WaitlistResponse | null = null;
+
+        try {
+          data = (await res.json()) as WaitlistResponse;
+        } catch {
+          data = null;
         }
-        if (typeof data.count === "number") {
+
+        if (!res.ok || data?.status === "error") {
+          throw new Error(getFriendlyWaitlistError(data));
+        }
+
+        if (typeof data?.count === "number") {
           setCount(data.count);
         }
         setStatus("success");
@@ -60,7 +107,11 @@ export default function WaitlistCard({ initialCount }: { initialCount: number })
       })
       .catch((err: unknown) => {
         setStatus("idle");
-        setError(err instanceof Error ? err.message : "An error occurred. Try again.");
+        setError(
+          err instanceof Error
+            ? err.message
+            : "We couldn't add you right now. Please try again in a moment."
+        );
         setShake(true);
         inputRef.current?.focus();
         setTimeout(() => setShake(false), 600);
@@ -275,13 +326,16 @@ export default function WaitlistCard({ initialCount }: { initialCount: number })
               </button>
             </div>
 
-            {error && (
-              <p
-                className="text-[#FF5050] text-[11px] sm:text-xs mt-3 px-1 tracking-tight font-mono whitespace-nowrap overflow-hidden text-ellipsis w-full"
-              >
-                {error}
-              </p>
-            )}
+            <p
+              role={error ? "alert" : undefined}
+              aria-live="polite"
+              className={[
+                "min-h-[18px] text-[11px] sm:text-xs mt-3 px-1 tracking-tight font-mono transition-colors w-full",
+                error ? "text-[#FF5C5C]" : "text-transparent",
+              ].join(" ")}
+            >
+              {error || " "}
+            </p>
           </div>
 
           {/* Success Content — visible when success */}
