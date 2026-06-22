@@ -8,7 +8,11 @@ import { WaveBackground } from "./WaveBackground";
 import { MeshGradient } from "@paper-design/shaders-react";
 import WaitlistCard from "./WaitlistCard";
 
-export default function Hero() {
+export default function Hero({
+  initialWaitlistCount,
+}: {
+  initialWaitlistCount: number;
+}) {
   return (
     <section
       className="relative flex flex-col items-center justify-center overflow-hidden bg-[#0A0A0A] w-full h-screen h-[100vh] h-[100dvh]"
@@ -66,7 +70,7 @@ export default function Hero() {
         </p>
 
         <div className="w-full max-w-[320px] sm:max-w-[420px]">
-          <WaitlistCard />
+          <WaitlistCard initialCount={initialWaitlistCount} />
         </div>
 
         {/* Social Link — positioned absolutely at the bottom to save vertical height */}

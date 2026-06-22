@@ -1,15 +1,15 @@
-/**
- * Home page — Hero section with form only
- */
-
-export const runtime = "edge";
-
 import Hero from "@/components/sections/Hero";
+import { getWaitlistCount } from "@/lib/waitlist-count";
 
-export default function Home() {
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+
+export default async function Home() {
+  const waitlistCount = await getWaitlistCount();
+
   return (
     <main>
-      <Hero />
+      <Hero initialWaitlistCount={waitlistCount} />
     </main>
   );
 }

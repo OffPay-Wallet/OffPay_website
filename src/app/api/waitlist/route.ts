@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
-import clientPromise from "@/lib/mongodb";
+import { getMongoClient } from "@/lib/mongodb";
+import { getWaitlistCount } from "@/lib/waitlist-count";
 import {
   WAITLIST_RATE_LIMIT_COLLECTION,
   WaitlistRateLimitError,
@@ -15,17 +16,8 @@ import {
 } from "@/lib/waitlist-security";
 
 export async function GET() {
-  try {
-    const client = await clientPromise;
-    const dbName = process.env.MONGODB_DB || "offpay";
-    const db = client.db(dbName);
-    const collection = db.collection("waitlist");
-
-    const count = await collection.countDocuments();
-    return NextResponse.json({ count }, { status: 200 });
-  } catch {
-    return NextResponse.json({ count: 0 }, { status: 200 });
-  }
+  const count = await getWaitlistCount();
+  return NextResponse.json({ count }, { status: 200 });
 }
 
 export async function POST(request: Request) {
@@ -71,7 +63,7 @@ export async function POST(request: Request) {
     const userAgent = getUserAgent(request.headers);
 
     // 5. Connect to MongoDB
-    const client = await clientPromise;
+    const client = await getMongoClient();
     const dbName = process.env.MONGODB_DB || "offpay";
     const db = client.db(dbName);
     const collection = db.collection<WaitlistEntry>("waitlist");
