@@ -1,19 +1,36 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useRef, useState, type CSSProperties } from "react";
 
 const ICON_PATH =
   "m55.9 51h-27.2v-2.2h28.5c-0.5-1.1-1.3-1.9-3.4-1.8h-29.3c-3.9-0.1-6 3.1-6 6.5v25.5c0 5.3 3.5 8.8 10.3 8.9h19.5c6.8 0.1 11.5-3.2 11.9-9.1v-23.8c0.1-2.7-1.6-4-4.3-4zm-21.3 19.6h-7.3v-3c0-1.6 1.3-3.5 3.7-3.3 2.1 0.2 3.6 1.7 3.6 3.7v2.6zm16 0h-7.6v-2.8c0-1.9 1.6-3.7 3.8-3.7s3.8 1.6 3.8 3.6v2.9z";
 
 const JOINED_SUCCESS_COPY = {
-  title: "You have been added to our waitlist!",
-  body: "Thank you for joining, you'll be the first to know when we are ready!",
+  title: "You're on the list.",
+  body: "Launch access will go to",
+  label: "Confirmed",
 };
 
 const REGISTERED_SUCCESS_COPY = {
-  title: "You're already on the waitlist.",
-  body: "You're all set. We'll let you know when OffPay is ready.",
+  title: "Already on the list.",
+  body: "We already have this email",
+  label: "Registered",
 };
+
+const CONFETTI_PARTICLES = [
+  { x: "-124px", y: "-54px", r: "-28deg", d: "0ms", c: "#ffffff", s: "6px" },
+  { x: "-90px", y: "-84px", r: "18deg", d: "35ms", c: "#bdbdbd", s: "5px" },
+  { x: "-48px", y: "-66px", r: "42deg", d: "70ms", c: "#f5f5f5", s: "7px" },
+  { x: "-12px", y: "-92px", r: "-12deg", d: "110ms", c: "#d7d7d7", s: "5px" },
+  { x: "32px", y: "-78px", r: "24deg", d: "55ms", c: "#ffffff", s: "6px" },
+  { x: "72px", y: "-60px", r: "-36deg", d: "95ms", c: "#cfcfcf", s: "5px" },
+  { x: "112px", y: "-42px", r: "16deg", d: "20ms", c: "#f1f1f1", s: "7px" },
+  { x: "-106px", y: "6px", r: "34deg", d: "130ms", c: "#e2e2e2", s: "5px" },
+  { x: "-62px", y: "28px", r: "-20deg", d: "85ms", c: "#ffffff", s: "6px" },
+  { x: "18px", y: "22px", r: "38deg", d: "145ms", c: "#b8b8b8", s: "5px" },
+  { x: "58px", y: "18px", r: "-16deg", d: "115ms", c: "#ffffff", s: "6px" },
+  { x: "104px", y: "4px", r: "30deg", d: "65ms", c: "#dcdcdc", s: "5px" },
+];
 
 function AppIcon({ className }: { className?: string }) {
   return (
@@ -25,6 +42,33 @@ function AppIcon({ className }: { className?: string }) {
     >
       <path d={ICON_PATH} />
     </svg>
+  );
+}
+
+function SuccessConfetti() {
+  return (
+    <div
+      className="pointer-events-none absolute inset-0 overflow-hidden rounded-[32px]"
+      aria-hidden="true"
+    >
+      <div className="absolute left-1/2 top-[42%] h-1 w-1">
+        {CONFETTI_PARTICLES.map((particle, index) => (
+          <span
+            key={`${particle.x}-${particle.y}-${index}`}
+            className="absolute block rounded-[2px] opacity-0 motion-safe:animate-[waitlist-confetti_780ms_cubic-bezier(0,0,0.2,1)_forwards]"
+            style={{
+              "--confetti-x": particle.x,
+              "--confetti-y": particle.y,
+              "--confetti-r": particle.r,
+              animationDelay: particle.d,
+              background: particle.c,
+              height: particle.s,
+              width: particle.s,
+            } as CSSProperties}
+          />
+        ))}
+      </div>
+    </div>
   );
 }
 
@@ -80,10 +124,20 @@ export default function WaitlistCard({ initialCount }: { initialCount: number })
   const [shake, setShake] = useState(false);
   const [count, setCount] = useState(initialCount);
   const [successCopy, setSuccessCopy] = useState(JOINED_SUCCESS_COPY);
+  const [successKind, setSuccessKind] = useState<"joined" | "registered">(
+    "joined"
+  );
+  const [submittedEmail, setSubmittedEmail] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
 
-  function showSuccess(copy: typeof JOINED_SUCCESS_COPY) {
+  function showSuccess(
+    copy: typeof JOINED_SUCCESS_COPY,
+    kind: "joined" | "registered",
+    cleanEmail: string
+  ) {
     setSuccessCopy(copy);
+    setSuccessKind(kind);
+    setSubmittedEmail(cleanEmail);
     setError(null);
     setStatus("success");
     setTimeout(() => {
@@ -122,7 +176,7 @@ export default function WaitlistCard({ initialCount }: { initialCount: number })
         }
 
         if (data?.code === "already_registered") {
-          showSuccess(REGISTERED_SUCCESS_COPY);
+          showSuccess(REGISTERED_SUCCESS_COPY, "registered", cleanEmail);
           return;
         }
 
@@ -130,7 +184,7 @@ export default function WaitlistCard({ initialCount }: { initialCount: number })
           throw new Error(getFriendlyWaitlistError(data));
         }
 
-        showSuccess(JOINED_SUCCESS_COPY);
+        showSuccess(JOINED_SUCCESS_COPY, "joined", cleanEmail);
       })
       .catch((err: unknown) => {
         setStatus("idle");
@@ -186,7 +240,7 @@ export default function WaitlistCard({ initialCount }: { initialCount: number })
         {/* Card content — above the beam, isolate stacking context */}
         <div
           className={[
-            "relative p-5 sm:p-6 rounded-[32px] flex flex-col transition-all duration-500 min-h-[200px] sm:min-h-[250px]",
+            "relative p-5 sm:p-6 rounded-[32px] flex flex-col transition-[opacity,transform] duration-500 min-h-[200px] sm:min-h-[250px]",
             status === "success" ? "items-center text-center justify-center" : "items-start text-left justify-start"
           ].join(" ")}
           style={{
@@ -197,10 +251,14 @@ export default function WaitlistCard({ initialCount }: { initialCount: number })
             isolation: "isolate",
           }}
         >
+          {status === "success" && successKind === "joined" && (
+            <SuccessConfetti />
+          )}
+
           {/* Card Form — visible when NOT success */}
           <div
             className={[
-              "w-full flex flex-col items-start text-left transition-all duration-500",
+              "w-full flex flex-col items-start text-left transition-[opacity,transform] duration-500",
               status === "success"
                 ? "opacity-0 scale-95 pointer-events-none absolute inset-x-0 px-5 sm:px-6"
                 : "opacity-100 scale-100",
@@ -246,7 +304,7 @@ export default function WaitlistCard({ initialCount }: { initialCount: number })
 
             {/* Email input + button — NO form, NO overlays */}
             <div
-              className="flex flex-col sm:flex-row items-stretch sm:items-center w-full p-2 sm:p-1.5 rounded-[24px] sm:rounded-full transition-all duration-300 gap-2 sm:gap-0"
+              className="flex flex-col sm:flex-row items-stretch sm:items-center w-full p-2 sm:p-1.5 rounded-[24px] sm:rounded-full transition-colors duration-300 gap-2 sm:gap-0"
               style={{
                 background: "rgba(255, 255, 255, 0.04)",
                 border: shake
@@ -283,7 +341,7 @@ export default function WaitlistCard({ initialCount }: { initialCount: number })
                   "flex items-center justify-center",
                   "font-medium text-[13px] sm:text-[14px] leading-none",
                   "font-mono tracking-[-0.02em]",
-                  "transition-all duration-300",
+                  "transition-[background-color,color,transform] duration-300",
                   "whitespace-nowrap w-full sm:w-auto sm:min-w-[115px]",
                   "cursor-pointer select-none",
                   status === "success"
@@ -373,34 +431,23 @@ export default function WaitlistCard({ initialCount }: { initialCount: number })
           {/* Success Content — visible when success */}
           <div
             className={[
-              "w-full flex flex-col items-center justify-center text-center transition-all duration-500",
+              "w-full flex flex-col items-center justify-center text-center transition-[opacity,transform] duration-500",
               status === "success"
                 ? "opacity-100 scale-100"
                 : "opacity-0 scale-95 pointer-events-none absolute inset-x-0 px-5 sm:px-7",
             ].join(" ")}
           >
-            {/* Success Checkmark Icon */}
-            <div className="relative mb-3 flex items-center justify-center">
-              {/* Soft glow behind the checkmark */}
-              <div className="absolute w-20 h-20 rounded-full bg-white/5 blur-xl pointer-events-none" />
-              {/* App Icon Shape Squircle */}
-              <div className="w-14 h-14 rounded-[16px] bg-white text-black flex items-center justify-center shadow-lg border border-white/10">
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="3.5"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  className="w-6 h-6 text-black"
-                >
-                  <polyline points="20 6 9 17 4 12" />
-                </svg>
+            <div className="relative mb-4 flex items-center justify-center">
+              <div className="absolute h-16 w-16 rounded-[18px] bg-white/10 blur-xl pointer-events-none" />
+              <div className="relative flex h-14 w-14 items-center justify-center rounded-[18px] border border-white/10 bg-white text-black shadow-[0_18px_48px_rgba(0,0,0,0.32)]">
+                <AppIcon className="h-11 w-11" />
               </div>
             </div>
 
-            {/* Success Headline */}
+            <div className="mb-3 rounded-full border border-white/10 bg-white/[0.06] px-3 py-1 text-[10px] font-mono uppercase tracking-[0.16em] text-white/65">
+              {successCopy.label}
+            </div>
+
             <h2
               className="text-2xl font-medium mb-2 text-white max-w-[280px]"
               style={{
@@ -412,26 +459,22 @@ export default function WaitlistCard({ initialCount }: { initialCount: number })
               {successCopy.title}
             </h2>
 
-            {/* Success Subheadline */}
             <p
-              className="text-[13px] sm:text-[14px] text-[#8F8F8F] leading-relaxed max-w-[260px] mb-4"
+              className="text-[13px] sm:text-[14px] text-[#9A9A9A] leading-relaxed max-w-[280px]"
               style={{ fontFamily: "var(--font-modernera), monospace" }}
             >
               {successCopy.body}
             </p>
 
-            {/* Social proof / Avatars */}
-            <div className="flex flex-col items-center gap-1.5 transition-opacity duration-300">
-              <div className="flex items-center">
-                <div className="w-6 h-6 rounded-full border border-black bg-gradient-to-tr from-zinc-800 to-zinc-700 flex items-center justify-center text-[9px] font-mono text-zinc-300 font-bold">A</div>
-                <div className="w-6 h-6 rounded-full border border-black bg-gradient-to-tr from-zinc-700 to-zinc-600 -ml-2 flex items-center justify-center text-[9px] font-mono text-zinc-300 font-bold">M</div>
-                <div className="w-6 h-6 rounded-full border border-black bg-gradient-to-tr from-zinc-600 to-zinc-500 -ml-2 flex items-center justify-center text-[9px] font-mono text-zinc-300 font-bold">J</div>
-                <div className="w-6 h-6 rounded-full border border-black bg-gradient-to-tr from-zinc-500 to-zinc-400 -ml-2 flex items-center justify-center text-[9px] font-mono text-zinc-300 font-bold">K</div>
-                <div className="w-6 h-6 rounded-full border border-black bg-gradient-to-tr from-zinc-400 to-zinc-300 -ml-2 flex items-center justify-center text-[9px] font-mono text-zinc-950 font-bold">L</div>
+            <div className="mt-4 w-full max-w-[300px] rounded-[20px] border border-white/10 bg-black/10 px-4 py-3 text-left">
+              <div className="flex items-center justify-between gap-3">
+                <span className="min-w-0 truncate text-[12px] text-white">
+                  {submittedEmail}
+                </span>
+                <span className="shrink-0 rounded-full bg-white/10 px-2 py-1 text-[10px] font-mono text-white/70">
+                  +{count.toLocaleString()}
+                </span>
               </div>
-              <span className="text-[11px] text-[#8F8F8F] font-mono tracking-tight">
-                You&apos;re not alone, <span className="text-white font-medium">{count.toLocaleString()}</span> people joined!
-              </span>
             </div>
           </div>
         </div>
