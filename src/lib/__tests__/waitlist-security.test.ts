@@ -80,6 +80,7 @@ test("enforceWaitlistRegistrationLimit ignores older successful registrations", 
 
 test("ensureWaitlistIndexes propagates index creation failures", async () => {
   const failingWaitlistCollection = {
+    indexes: async () => [],
     createIndex: async () => {
       throw new Error("index denied");
     },
@@ -87,6 +88,39 @@ test("ensureWaitlistIndexes propagates index creation failures", async () => {
   await assert.rejects(
     () => ensureWaitlistIndexes(failingWaitlistCollection),
     /index denied/
+  );
+});
+
+test("ensureWaitlistIndexes accepts an existing unique email index with any name", async () => {
+  let createIndexCalls = 0;
+  const waitlistCollection = {
+    indexes: async () => [
+      { key: { _id: 1 } },
+      { key: { email: 1 }, unique: true, name: "email_1" },
+    ],
+    createIndex: async () => {
+      createIndexCalls += 1;
+      return "created";
+    },
+  } as unknown as Collection<WaitlistEntry>;
+
+  await ensureWaitlistIndexes(waitlistCollection);
+
+  assert.equal(createIndexCalls, 1);
+});
+
+test("ensureWaitlistIndexes rejects an existing non-unique email index", async () => {
+  const waitlistCollection = {
+    indexes: async () => [
+      { key: { _id: 1 } },
+      { key: { email: 1 }, name: "email_1" },
+    ],
+    createIndex: async () => "created",
+  } as unknown as Collection<WaitlistEntry>;
+
+  await assert.rejects(
+    () => ensureWaitlistIndexes(waitlistCollection),
+    /email index must be unique/
   );
 });
 

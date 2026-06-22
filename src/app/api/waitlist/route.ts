@@ -149,7 +149,9 @@ export async function POST(request: Request) {
       { status: 200 }
     );
 
-  } catch {
+  } catch (error) {
+    console.error("waitlist.post.failed", error);
+
     // 7. Mask internal database exceptions to prevent details leak
     return waitlistError(
       "temporarily_unavailable",

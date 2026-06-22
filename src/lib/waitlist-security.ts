@@ -89,17 +89,53 @@ export function getUserAgent(headers: Headers) {
   );
 }
 
+type WaitlistIndexDescription = {
+  key?: Record<string, number>;
+  unique?: boolean;
+};
+
+function hasIndexKey(
+  index: WaitlistIndexDescription,
+  expectedKey: Record<string, number>
+) {
+  const actualEntries = Object.entries(index.key ?? {});
+  const expectedEntries = Object.entries(expectedKey);
+
+  return (
+    actualEntries.length === expectedEntries.length &&
+    expectedEntries.every(
+      ([field, direction]) => index.key?.[field] === direction
+    )
+  );
+}
+
 export async function ensureWaitlistIndexes(
   waitlistCollection: Collection<WaitlistEntry>
 ) {
-  await waitlistCollection.createIndex(
-    { email: 1 },
-    { unique: true, name: "waitlist_email_unique" }
+  const indexes =
+    (await waitlistCollection.indexes()) as WaitlistIndexDescription[];
+  const emailIndex = indexes.find((index) => hasIndexKey(index, { email: 1 }));
+
+  if (emailIndex) {
+    if (emailIndex.unique !== true) {
+      throw new Error("waitlist email index must be unique");
+    }
+  } else {
+    await waitlistCollection.createIndex(
+      { email: 1 },
+      { unique: true, name: "waitlist_email_unique" }
+    );
+  }
+
+  const hasIpCreatedAtIndex = indexes.some((index) =>
+    hasIndexKey(index, { ip: 1, createdAt: -1 })
   );
-  await waitlistCollection.createIndex(
-    { ip: 1, createdAt: -1 },
-    { name: "waitlist_ip_created_at" }
-  );
+
+  if (!hasIpCreatedAtIndex) {
+    await waitlistCollection
+      .createIndex({ ip: 1, createdAt: -1 }, { name: "waitlist_ip_created_at" })
+      .catch(() => {});
+  }
 }
 
 export function isDuplicateKeyError(error: unknown) {
