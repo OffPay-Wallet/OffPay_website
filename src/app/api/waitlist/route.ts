@@ -6,7 +6,9 @@ import {
   WaitlistRateLimitError,
   acquireWaitlistIpRateLimit,
   enforceWaitlistRegistrationLimit,
+  enforceWaitlistRequestLimit,
   ensureWaitlistIndexes,
+  ensureWaitlistRequestLimitIndexes,
   ensureWaitlistRateLimitIndexes,
   getClientIp,
   getEmailValidationError,
@@ -16,6 +18,7 @@ import {
   normalizeEmail,
   releaseWaitlistIpRateLimit,
   type WaitlistEntry,
+  type WaitlistIpRequestLimit,
   type WaitlistIpRateLimit,
 } from "@/lib/waitlist-security";
 
@@ -89,10 +92,32 @@ export async function POST(request: Request) {
     const collection = db.collection<WaitlistEntry>("waitlist");
     const rateLimitCollection =
       db.collection<WaitlistIpRateLimit>("waitlist_ip_rate_limits");
+    const requestLimitCollection =
+      db.collection<WaitlistIpRequestLimit>("waitlist_ip_request_limits");
 
     // Fail closed if the database cannot enforce unique emails and indexed IP limits.
     await ensureWaitlistIndexes(collection);
     await ensureWaitlistRateLimitIndexes(rateLimitCollection);
+    await ensureWaitlistRequestLimitIndexes(requestLimitCollection);
+
+    const now = new Date();
+
+    try {
+      await enforceWaitlistRequestLimit(requestLimitCollection, {
+        ip,
+        now,
+      });
+    } catch (error: unknown) {
+      if (error instanceof WaitlistRateLimitError) {
+        return waitlistError(
+          "rate_limited",
+          "Please wait before trying again.",
+          { status: 429 },
+          { retryAfterSeconds: error.retryAfterSeconds }
+        );
+      }
+      throw error;
+    }
 
     const existingEntry = await collection.findOne(
       { email: cleanedEmail },
@@ -109,8 +134,6 @@ export async function POST(request: Request) {
       );
     }
 
-    const now = new Date();
-
     try {
       await enforceWaitlistRegistrationLimit(collection, {
         ip,
@@ -120,7 +143,7 @@ export async function POST(request: Request) {
       if (error instanceof WaitlistRateLimitError) {
         return waitlistError(
           "rate_limited",
-          "Too many attempts. Please try again soon.",
+          "Please wait before trying again.",
           { status: 429 },
           { retryAfterSeconds: error.retryAfterSeconds }
         );
@@ -141,7 +164,7 @@ export async function POST(request: Request) {
 
       return waitlistError(
         "rate_limited",
-        "Too many attempts. Please try again soon.",
+        "Please wait before trying again.",
         { status: 429 },
         { count, retryAfterSeconds: rateLimitResult.retryAfterSeconds }
       );
@@ -171,7 +194,7 @@ export async function POST(request: Request) {
 
       return waitlistError(
         "rate_limited",
-        "Too many attempts. Please try again soon.",
+        "Please wait before trying again.",
         { status: 429 },
         {
           count,

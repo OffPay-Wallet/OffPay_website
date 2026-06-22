@@ -2,10 +2,12 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import type { Collection } from "mongodb";
 import {
+  WAITLIST_IP_REQUEST_LIMIT,
   WAITLIST_RATE_LIMIT_WINDOW_MS,
   WaitlistRateLimitError,
   acquireWaitlistIpRateLimit,
   enforceWaitlistRegistrationLimit,
+  enforceWaitlistRequestLimit,
   ensureWaitlistIndexes,
   getDuplicateKeyField,
   getClientIp,
@@ -17,6 +19,7 @@ import {
   releaseWaitlistIpRateLimit,
   sanitizeHeaderValue,
   type WaitlistEntry,
+  type WaitlistIpRequestLimit,
   type WaitlistIpRateLimit,
 } from "../waitlist-security";
 
@@ -92,6 +95,85 @@ class InMemoryRateLimitCollection {
     );
 
     return { deletedCount: beforeCount - this.locks.length };
+  }
+}
+
+type RequestLimitFilter = {
+  _id: string;
+  requestCount?: { $gte?: number; $lt?: number };
+  windowStartedAt?: Date;
+};
+
+class InMemoryRequestLimitCollection {
+  constructor(private records: WaitlistIpRequestLimit[] = []) {}
+
+  async findOne(filter: { _id: string }) {
+    return this.records.find((record) => record._id === filter._id) ?? null;
+  }
+
+  async insertOne(document: WaitlistIpRequestLimit) {
+    if (this.records.some((record) => record._id === document._id)) {
+      throw { code: 11000, keyPattern: { _id: 1 } };
+    }
+
+    this.records.push({ ...document });
+    return { acknowledged: true, insertedId: document._id };
+  }
+
+  async updateOne(
+    filter: RequestLimitFilter,
+    update: {
+      $inc?: { requestCount?: number };
+      $set?: Partial<WaitlistIpRequestLimit>;
+      $unset?: { blockedUntil?: string };
+    }
+  ) {
+    const record = this.records.find((candidate) => {
+      if (candidate._id !== filter._id) {
+        return false;
+      }
+
+      if (
+        filter.windowStartedAt &&
+        candidate.windowStartedAt.getTime() !== filter.windowStartedAt.getTime()
+      ) {
+        return false;
+      }
+
+      if (
+        filter.requestCount?.$gte !== undefined &&
+        candidate.requestCount < filter.requestCount.$gte
+      ) {
+        return false;
+      }
+
+      if (
+        filter.requestCount?.$lt !== undefined &&
+        candidate.requestCount >= filter.requestCount.$lt
+      ) {
+        return false;
+      }
+
+      return true;
+    });
+
+    if (!record) {
+      return { matchedCount: 0, modifiedCount: 0 };
+    }
+
+    if (update.$inc?.requestCount) {
+      record.requestCount += update.$inc.requestCount;
+    }
+
+    if (update.$set) {
+      Object.assign(record, update.$set);
+    }
+
+    if (update.$unset?.blockedUntil !== undefined) {
+      delete record.blockedUntil;
+    }
+
+    return { matchedCount: 1, modifiedCount: 1 };
   }
 }
 
@@ -226,6 +308,66 @@ test("releaseWaitlistIpRateLimit clears an acquired lock for failed inserts", as
   });
 
   assert.equal(secondResult.status, "acquired");
+});
+
+test("enforceWaitlistRequestLimit blocks the sixth valid request for one hour", async () => {
+  const ip = "198.51.100.10";
+  const now = new Date("2026-06-22T06:00:00.000Z");
+  const collection =
+    new InMemoryRequestLimitCollection() as unknown as Collection<WaitlistIpRequestLimit>;
+
+  for (
+    let requestIndex = 0;
+    requestIndex < WAITLIST_IP_REQUEST_LIMIT;
+    requestIndex += 1
+  ) {
+    await enforceWaitlistRequestLimit(collection, { ip, now });
+  }
+
+  await assert.rejects(
+    () => enforceWaitlistRequestLimit(collection, { ip, now }),
+    (error) =>
+      error instanceof WaitlistRateLimitError &&
+      error.retryAfterSeconds === WAITLIST_RATE_LIMIT_WINDOW_MS / 1000
+  );
+});
+
+test("enforceWaitlistRequestLimit resets old request windows", async () => {
+  const ip = "198.51.100.10";
+  const now = new Date("2026-06-22T06:00:00.000Z");
+  const collection = new InMemoryRequestLimitCollection([
+    {
+      _id: ip,
+      requestCount: WAITLIST_IP_REQUEST_LIMIT,
+      windowStartedAt: new Date(
+        now.getTime() - WAITLIST_RATE_LIMIT_WINDOW_MS - 1
+      ),
+      updatedAt: new Date(now.getTime() - WAITLIST_RATE_LIMIT_WINDOW_MS - 1),
+    },
+  ]) as unknown as Collection<WaitlistIpRequestLimit>;
+
+  await enforceWaitlistRequestLimit(collection, { ip, now });
+});
+
+test("enforceWaitlistRequestLimit keeps active server-side request blocks", async () => {
+  const ip = "198.51.100.10";
+  const now = new Date("2026-06-22T06:00:00.000Z");
+  const collection = new InMemoryRequestLimitCollection([
+    {
+      _id: ip,
+      blockedUntil: new Date(now.getTime() + 10 * 60 * 1000),
+      requestCount: WAITLIST_IP_REQUEST_LIMIT,
+      windowStartedAt: now,
+      updatedAt: now,
+    },
+  ]) as unknown as Collection<WaitlistIpRequestLimit>;
+
+  await assert.rejects(
+    () => enforceWaitlistRequestLimit(collection, { ip, now }),
+    (error) =>
+      error instanceof WaitlistRateLimitError &&
+      error.retryAfterSeconds === 10 * 60
+  );
 });
 
 test("ensureWaitlistIndexes propagates index creation failures", async () => {

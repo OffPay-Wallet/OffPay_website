@@ -5,11 +5,16 @@ const MAX_EMAIL_LENGTH = 254;
 const MAX_STORED_IP_LENGTH = 128;
 const MAX_STORED_USER_AGENT_LENGTH = 512;
 const DEFAULT_IP_RATE_LIMIT = 1;
+const DEFAULT_IP_REQUEST_LIMIT = 5;
 
 export const WAITLIST_RATE_LIMIT_WINDOW_MS = 60 * 60 * 1000;
 export const WAITLIST_IP_RATE_LIMIT = parsePositiveInteger(
   process.env.WAITLIST_IP_RATE_LIMIT,
   DEFAULT_IP_RATE_LIMIT
+);
+export const WAITLIST_IP_REQUEST_LIMIT = parsePositiveInteger(
+  process.env.WAITLIST_IP_REQUEST_LIMIT,
+  DEFAULT_IP_REQUEST_LIMIT
 );
 
 export interface WaitlistEntry extends Document {
@@ -24,6 +29,14 @@ export interface WaitlistIpRateLimit extends Document {
   _id: string;
   createdAt: Date;
   expiresAt: Date;
+  updatedAt: Date;
+}
+
+export interface WaitlistIpRequestLimit extends Document {
+  _id: string;
+  windowStartedAt: Date;
+  requestCount: number;
+  blockedUntil?: Date;
   updatedAt: Date;
 }
 
@@ -239,6 +252,18 @@ export async function ensureWaitlistRateLimitIndexes(
   );
 }
 
+export async function ensureWaitlistRequestLimitIndexes(
+  requestLimitCollection: Collection<WaitlistIpRequestLimit>
+) {
+  await requestLimitCollection.createIndex(
+    { blockedUntil: 1 },
+    {
+      expireAfterSeconds: 0,
+      name: "waitlist_ip_request_blocked_until",
+    }
+  );
+}
+
 export function isDuplicateKeyError(error: unknown) {
   return (
     typeof error === "object" &&
@@ -351,6 +376,128 @@ export async function enforceWaitlistRegistrationLimit(
     const retryAfterSeconds = Math.max(1, Math.ceil(retryAfterMs / 1000));
     throw new WaitlistRateLimitError(retryAfterSeconds);
   }
+}
+
+export async function enforceWaitlistRequestLimit(
+  requestLimitCollection: Collection<WaitlistIpRequestLimit>,
+  {
+    ip,
+    limit = WAITLIST_IP_REQUEST_LIMIT,
+    now = new Date(),
+    attempt = 0,
+  }: {
+    ip: string;
+    limit?: number;
+    now?: Date;
+    attempt?: number;
+  }
+): Promise<void> {
+  const windowStart = new Date(now.getTime() - WAITLIST_RATE_LIMIT_WINDOW_MS);
+  const currentRecord = await requestLimitCollection.findOne(
+    { _id: ip },
+    {
+      projection: {
+        blockedUntil: 1,
+        requestCount: 1,
+        windowStartedAt: 1,
+      },
+    }
+  );
+
+  if (currentRecord?.blockedUntil && currentRecord.blockedUntil > now) {
+    throw new WaitlistRateLimitError(
+      getRetryAfterSeconds(currentRecord.blockedUntil, now)
+    );
+  }
+
+  if (!currentRecord) {
+    try {
+      await requestLimitCollection.insertOne({
+        _id: ip,
+        requestCount: 1,
+        windowStartedAt: now,
+        updatedAt: now,
+      });
+      return;
+    } catch (error: unknown) {
+      if (!isDuplicateKeyError(error) || attempt >= 2) {
+        throw error;
+      }
+
+      return enforceWaitlistRequestLimit(requestLimitCollection, {
+        ip,
+        limit,
+        now,
+        attempt: attempt + 1,
+      });
+    }
+  }
+
+  if (currentRecord.windowStartedAt < windowStart) {
+    const resetResult = await requestLimitCollection.updateOne(
+      { _id: ip, windowStartedAt: currentRecord.windowStartedAt },
+      {
+        $set: {
+          requestCount: 1,
+          updatedAt: now,
+          windowStartedAt: now,
+        },
+        $unset: { blockedUntil: "" },
+      }
+    );
+
+    if (resetResult.matchedCount === 1) {
+      return;
+    }
+
+    if (attempt >= 2) {
+      throw new WaitlistRateLimitError(1);
+    }
+
+    return enforceWaitlistRequestLimit(requestLimitCollection, {
+      ip,
+      limit,
+      now,
+      attempt: attempt + 1,
+    });
+  }
+
+  const incrementResult = await requestLimitCollection.updateOne(
+    {
+      _id: ip,
+      requestCount: { $lt: limit },
+      windowStartedAt: currentRecord.windowStartedAt,
+    },
+    {
+      $inc: { requestCount: 1 },
+      $set: { updatedAt: now },
+    }
+  );
+
+  if (incrementResult.matchedCount === 1) {
+    return;
+  }
+
+  const blockedUntil = getRateLimitExpiresAt(now);
+  await requestLimitCollection.updateOne(
+    {
+      _id: ip,
+      requestCount: { $gte: limit },
+      windowStartedAt: currentRecord.windowStartedAt,
+    },
+    {
+      $set: { blockedUntil, updatedAt: now },
+    }
+  );
+
+  const latestRecord = await requestLimitCollection.findOne(
+    { _id: ip },
+    { projection: { blockedUntil: 1 } }
+  );
+
+  throw new WaitlistRateLimitError(
+    getRetryAfterSeconds(latestRecord?.blockedUntil ?? blockedUntil, now)
+  );
 }
 
 export async function acquireWaitlistIpRateLimit(

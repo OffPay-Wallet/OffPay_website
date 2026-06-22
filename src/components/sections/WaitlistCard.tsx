@@ -1,10 +1,19 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 
 const ICON_PATH =
   "m55.9 51h-27.2v-2.2h28.5c-0.5-1.1-1.3-1.9-3.4-1.8h-29.3c-3.9-0.1-6 3.1-6 6.5v25.5c0 5.3 3.5 8.8 10.3 8.9h19.5c6.8 0.1 11.5-3.2 11.9-9.1v-23.8c0.1-2.7-1.6-4-4.3-4zm-21.3 19.6h-7.3v-3c0-1.6 1.3-3.5 3.7-3.3 2.1 0.2 3.6 1.7 3.6 3.7v2.6zm16 0h-7.6v-2.8c0-1.9 1.6-3.7 3.8-3.7s3.8 1.6 3.8 3.6v2.9z";
-const WAITLIST_RATE_LIMIT_UNTIL_KEY = "offpay_waitlist_rate_limited_until";
+
+const JOINED_SUCCESS_COPY = {
+  title: "You have been added to our waitlist!",
+  body: "Thank you for joining, you'll be the first to know when we are ready!",
+};
+
+const REGISTERED_SUCCESS_COPY = {
+  title: "You're already on the waitlist.",
+  body: "You're all set. We'll let you know when OffPay is ready.",
+};
 
 function AppIcon({ className }: { className?: string }) {
   return (
@@ -35,20 +44,6 @@ function formatRetryAfter(seconds: number) {
   return `${Math.ceil(seconds / 60)}m`;
 }
 
-function getStoredRateLimitUntil() {
-  if (typeof window === "undefined") {
-    return null;
-  }
-
-  const storedValue = Number(
-    window.localStorage.getItem(WAITLIST_RATE_LIMIT_UNTIL_KEY)
-  );
-
-  return Number.isFinite(storedValue) && storedValue > Date.now()
-    ? storedValue
-    : null;
-}
-
 function getFriendlyWaitlistError(data: WaitlistResponse | null) {
   if (!data) {
     return "We couldn't reach the waitlist. Please try again in a moment.";
@@ -60,7 +55,7 @@ function getFriendlyWaitlistError(data: WaitlistResponse | null) {
         ? ` Try again in ${formatRetryAfter(data.retryAfterSeconds)}.`
         : "";
 
-    return `Too many attempts.${retryAfter}`;
+    return `Please wait before trying again.${retryAfter}`;
   }
 
   if (data.code === "temporarily_unavailable") {
@@ -68,11 +63,7 @@ function getFriendlyWaitlistError(data: WaitlistResponse | null) {
   }
 
   if (data.code === "already_registered") {
-    return "This email is already on the waitlist.";
-  }
-
-  if (data.code === "ip_already_registered") {
-    return "This IP has already joined the waitlist.";
+    return "You're already on the waitlist.";
   }
 
   if (data.code === "invalid_email" || data.code === "invalid_request") {
@@ -88,64 +79,22 @@ export default function WaitlistCard({ initialCount }: { initialCount: number })
   const [error, setError] = useState<string | null>(null);
   const [shake, setShake] = useState(false);
   const [count, setCount] = useState(initialCount);
-  const [rateLimitedUntil, setRateLimitedUntil] = useState<number | null>(
-    getStoredRateLimitUntil
-  );
+  const [successCopy, setSuccessCopy] = useState(JOINED_SUCCESS_COPY);
   const inputRef = useRef<HTMLInputElement>(null);
-  const isRateLimited = rateLimitedUntil !== null;
-  const visibleError =
-    error ??
-    (isRateLimited
-      ? "Too many attempts. Please wait for the cooldown to expire."
-      : null);
 
-  function setRateLimitCooldown(retryAfterSeconds: number) {
-    const expiresAt = Date.now() + retryAfterSeconds * 1000;
-
-    setRateLimitedUntil(expiresAt);
-    setError(
-      `Too many attempts. Try again in ${formatRetryAfter(retryAfterSeconds)}.`
-    );
-    window.localStorage.setItem(
-      WAITLIST_RATE_LIMIT_UNTIL_KEY,
-      String(expiresAt)
-    );
+  function showSuccess(copy: typeof JOINED_SUCCESS_COPY) {
+    setSuccessCopy(copy);
+    setError(null);
+    setStatus("success");
+    setTimeout(() => {
+      setStatus("idle");
+      setEmail("");
+    }, 6000);
   }
-
-  useEffect(() => {
-    if (!rateLimitedUntil) {
-      return;
-    }
-
-    const timeoutId = window.setTimeout(() => {
-      setRateLimitedUntil(null);
-      window.localStorage.removeItem(WAITLIST_RATE_LIMIT_UNTIL_KEY);
-      setError(null);
-    }, Math.max(0, rateLimitedUntil - Date.now()));
-
-    return () => window.clearTimeout(timeoutId);
-  }, [rateLimitedUntil]);
 
   function onButtonClick() {
     // If already processing, ignore
     if (status !== "idle") return;
-
-    if (rateLimitedUntil !== null) {
-      const remainingMs = rateLimitedUntil - Date.now();
-      if (remainingMs <= 0) {
-        setRateLimitedUntil(null);
-        window.localStorage.removeItem(WAITLIST_RATE_LIMIT_UNTIL_KEY);
-      } else {
-        const remainingSeconds = Math.max(1, Math.ceil(remainingMs / 1000));
-
-        setError(
-          `Too many attempts. Try again in ${formatRetryAfter(remainingSeconds)}.`
-        );
-        setShake(true);
-        setTimeout(() => setShake(false), 600);
-        return;
-      }
-    }
 
     const cleanEmail = email.trim();
 
@@ -168,22 +117,20 @@ export default function WaitlistCard({ initialCount }: { initialCount: number })
           data = null;
         }
 
-        if (typeof data?.retryAfterSeconds === "number") {
-          setRateLimitCooldown(data.retryAfterSeconds);
+        if (typeof data?.count === "number") {
+          setCount(data.count);
+        }
+
+        if (data?.code === "already_registered") {
+          showSuccess(REGISTERED_SUCCESS_COPY);
+          return;
         }
 
         if (!res.ok || data?.status === "error") {
           throw new Error(getFriendlyWaitlistError(data));
         }
 
-        if (typeof data?.count === "number") {
-          setCount(data.count);
-        }
-        setStatus("success");
-        setTimeout(() => {
-          setStatus("idle");
-          setEmail("");
-        }, 6000);
+        showSuccess(JOINED_SUCCESS_COPY);
       })
       .catch((err: unknown) => {
         setStatus("idle");
@@ -310,14 +257,18 @@ export default function WaitlistCard({ initialCount }: { initialCount: number })
             >
               <input
                 ref={inputRef}
-                type="text"
+                type="email"
                 value={email}
                 onChange={(e) => {
                   setEmail(e.target.value);
-                  if (error && !isRateLimited) setError(null);
+                  if (error) setError(null);
                 }}
                 onKeyDown={onInputKeyDown}
                 placeholder="Enter your email..."
+                autoComplete="email"
+                spellCheck={false}
+                aria-invalid={error ? "true" : undefined}
+                aria-describedby={error ? "waitlist-error" : undefined}
                 disabled={status !== "idle"}
                 className="flex-1 min-w-0 bg-transparent border-none outline-none text-white px-4 py-3 sm:py-2 text-[13px] sm:text-[14px] placeholder-white/30 disabled:opacity-50"
                 style={{ fontFamily: "var(--font-modernera), monospace" }}
@@ -326,7 +277,7 @@ export default function WaitlistCard({ initialCount }: { initialCount: number })
               <button
                 type="button"
                 onClick={onButtonClick}
-                disabled={status !== "idle" || isRateLimited}
+                disabled={status !== "idle"}
                 className={[
                   "rounded-full px-4 sm:px-4 py-[12px] sm:py-[8.5px]",
                   "flex items-center justify-center",
@@ -337,7 +288,7 @@ export default function WaitlistCard({ initialCount }: { initialCount: number })
                   "cursor-pointer select-none",
                   status === "success"
                     ? "bg-white text-black scale-105"
-                    : status === "loading" || isRateLimited
+                    : status === "loading"
                     ? "bg-white/20 text-white cursor-wait"
                     : "bg-white text-black hover:bg-[#E5E5E5] hover:scale-105 active:scale-95",
                 ].join(" ")}
@@ -407,14 +358,15 @@ export default function WaitlistCard({ initialCount }: { initialCount: number })
             </div>
 
             <p
-              role={visibleError ? "alert" : undefined}
+              id="waitlist-error"
+              role={error ? "alert" : undefined}
               aria-live="polite"
               className={[
                 "min-h-[18px] text-[11px] sm:text-xs mt-3 px-1 tracking-tight font-mono transition-colors w-full",
-                visibleError ? "text-[#FF5C5C]" : "text-transparent",
+                error ? "text-[#FF5C5C]" : "text-transparent",
               ].join(" ")}
             >
-              {visibleError || " "}
+              {error || " "}
             </p>
           </div>
 
@@ -457,7 +409,7 @@ export default function WaitlistCard({ initialCount }: { initialCount: number })
                 lineHeight: 1.15
               }}
             >
-              You have been added to our waitlist!
+              {successCopy.title}
             </h2>
 
             {/* Success Subheadline */}
@@ -465,7 +417,7 @@ export default function WaitlistCard({ initialCount }: { initialCount: number })
               className="text-[13px] sm:text-[14px] text-[#8F8F8F] leading-relaxed max-w-[260px] mb-4"
               style={{ fontFamily: "var(--font-modernera), monospace" }}
             >
-              Thank you for joining, you&apos;ll be the first to know when we are ready!
+              {successCopy.body}
             </p>
 
             {/* Social proof / Avatars */}
