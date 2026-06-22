@@ -16,7 +16,15 @@ export interface WaitlistEntry extends Document {
   email: string;
   createdAt: Date;
   ip: string;
+  ipWindowStart?: Date;
   userAgent: string;
+}
+
+export interface WaitlistIpRateLimit extends Document {
+  _id: string;
+  createdAt: Date;
+  expiresAt: Date;
+  updatedAt: Date;
 }
 
 export class WaitlistRateLimitError extends Error {
@@ -28,6 +36,10 @@ export class WaitlistRateLimitError extends Error {
     this.retryAfterSeconds = retryAfterSeconds;
   }
 }
+
+export type WaitlistIpRateLimitResult =
+  | { status: "acquired"; expiresAt: Date }
+  | { status: "limited"; expiresAt: Date | null; retryAfterSeconds: number };
 
 function parsePositiveInteger(value: string | undefined, fallback: number) {
   if (!value) {
@@ -179,6 +191,16 @@ export async function ensureWaitlistIndexes(
     );
   }
 
+  const ipIndex = indexes.find((index) => hasIndexKey(index, { ip: 1 }));
+
+  if (ipIndex?.unique === true) {
+    if (!ipIndex.name) {
+      throw new Error("waitlist IP index must be named before replacement");
+    }
+
+    await waitlistCollection.dropIndex(ipIndex.name);
+  }
+
   const hasIpCreatedAtIndex = indexes.some((index) =>
     hasIndexKey(index, { ip: 1, createdAt: -1 })
   );
@@ -188,6 +210,33 @@ export async function ensureWaitlistIndexes(
       .createIndex({ ip: 1, createdAt: -1 }, { name: "waitlist_ip_created_at" })
       .catch(() => {});
   }
+
+  const hasIpWindowIndex = indexes.some((index) =>
+    hasIndexKey(index, { ip: 1, ipWindowStart: 1 })
+  );
+
+  if (!hasIpWindowIndex) {
+    await waitlistCollection.createIndex(
+      { ip: 1, ipWindowStart: 1 },
+      {
+        unique: true,
+        name: "waitlist_ip_window_unique",
+        partialFilterExpression: { ipWindowStart: { $exists: true } },
+      }
+    );
+  }
+}
+
+export async function ensureWaitlistRateLimitIndexes(
+  rateLimitCollection: Collection<WaitlistIpRateLimit>
+) {
+  await rateLimitCollection.createIndex(
+    { expiresAt: 1 },
+    {
+      expireAfterSeconds: 0,
+      name: "waitlist_ip_rate_limit_expires_at",
+    }
+  );
 }
 
 export function isDuplicateKeyError(error: unknown) {
@@ -199,6 +248,35 @@ export function isDuplicateKeyError(error: unknown) {
   );
 }
 
+export function getDuplicateKeyField(error: unknown) {
+  if (!isDuplicateKeyError(error)) {
+    return null;
+  }
+
+  const duplicateError = error as {
+    keyPattern?: Record<string, unknown>;
+    message?: string;
+  };
+
+  if (duplicateError.keyPattern?.email === 1) {
+    return "email";
+  }
+
+  if (duplicateError.keyPattern?.ip === 1) {
+    return "ip";
+  }
+
+  if (duplicateError.message?.includes("waitlist_ip_window_unique")) {
+    return "ip";
+  }
+
+  if (duplicateError.message?.includes("waitlist_email_unique")) {
+    return "email";
+  }
+
+  return "unknown";
+}
+
 export async function insertUniqueWaitlistEntry(
   waitlistCollection: Collection<WaitlistEntry>,
   entry: WaitlistEntry
@@ -207,9 +285,20 @@ export async function insertUniqueWaitlistEntry(
     await waitlistCollection.insertOne(entry);
     return "inserted";
   } catch (error: unknown) {
-    if (isDuplicateKeyError(error)) {
+    const duplicateKeyField = getDuplicateKeyField(error);
+
+    if (duplicateKeyField === "email") {
+      return "duplicate_email";
+    }
+
+    if (duplicateKeyField === "ip") {
+      return "duplicate_ip";
+    }
+
+    if (duplicateKeyField === "unknown") {
       return "duplicate";
     }
+
     throw error;
   }
 }
@@ -218,6 +307,17 @@ export function getRateLimitWindowStart(now: Date) {
   return new Date(
     Math.floor(now.getTime() / WAITLIST_RATE_LIMIT_WINDOW_MS) *
       WAITLIST_RATE_LIMIT_WINDOW_MS
+  );
+}
+
+export function getRateLimitExpiresAt(now: Date) {
+  return new Date(now.getTime() + WAITLIST_RATE_LIMIT_WINDOW_MS);
+}
+
+function getRetryAfterSeconds(expiresAt: Date | undefined, now: Date) {
+  return Math.max(
+    1,
+    Math.ceil(((expiresAt?.getTime() ?? now.getTime()) - now.getTime()) / 1000)
   );
 }
 
@@ -233,20 +333,100 @@ export async function enforceWaitlistRegistrationLimit(
     now?: Date;
   }
 ) {
-  const windowStart = getRateLimitWindowStart(now);
-  const nextWindowStart = new Date(
-    windowStart.getTime() + WAITLIST_RATE_LIMIT_WINDOW_MS
-  );
+  const windowStart = new Date(now.getTime() - WAITLIST_RATE_LIMIT_WINDOW_MS);
   const recentRegistrations = await waitlistCollection.countDocuments({
     ip,
     createdAt: { $gte: windowStart },
   });
 
   if (recentRegistrations >= limit) {
-    const retryAfterSeconds = Math.max(
-      1,
-      Math.ceil((nextWindowStart.getTime() - now.getTime()) / 1000)
+    const oldestRecentRegistration = await waitlistCollection.findOne(
+      { ip, createdAt: { $gte: windowStart } },
+      { sort: { createdAt: 1 }, projection: { createdAt: 1 } }
     );
+    const retryAfterMs =
+      (oldestRecentRegistration?.createdAt?.getTime() ?? now.getTime()) +
+      WAITLIST_RATE_LIMIT_WINDOW_MS -
+      now.getTime();
+    const retryAfterSeconds = Math.max(1, Math.ceil(retryAfterMs / 1000));
     throw new WaitlistRateLimitError(retryAfterSeconds);
   }
+}
+
+export async function acquireWaitlistIpRateLimit(
+  rateLimitCollection: Collection<WaitlistIpRateLimit>,
+  {
+    ip,
+    now = new Date(),
+  }: {
+    ip: string;
+    now?: Date;
+  }
+): Promise<WaitlistIpRateLimitResult> {
+  const existingLock = await rateLimitCollection.findOne(
+    { _id: ip },
+    { projection: { expiresAt: 1 } }
+  );
+
+  if (existingLock?.expiresAt && existingLock.expiresAt > now) {
+    return {
+      status: "limited",
+      expiresAt: existingLock.expiresAt,
+      retryAfterSeconds: getRetryAfterSeconds(existingLock.expiresAt, now),
+    };
+  }
+
+  const expiresAt = getRateLimitExpiresAt(now);
+  const lockDocument: WaitlistIpRateLimit = {
+    _id: ip,
+    createdAt: now,
+    expiresAt,
+    updatedAt: now,
+  };
+
+  if (!existingLock) {
+    try {
+      await rateLimitCollection.insertOne(lockDocument);
+      return { status: "acquired", expiresAt };
+    } catch (error: unknown) {
+      if (!isDuplicateKeyError(error)) {
+        throw error;
+      }
+    }
+  } else {
+    const updateResult = await rateLimitCollection.updateOne(
+      { _id: ip, expiresAt: { $lte: now } },
+      {
+        $set: { expiresAt, updatedAt: now },
+      }
+    );
+
+    if (updateResult.matchedCount === 1) {
+      return { status: "acquired", expiresAt };
+    }
+  }
+
+  const activeLock = await rateLimitCollection.findOne(
+    { _id: ip },
+    { projection: { expiresAt: 1 } }
+  );
+
+  return {
+    status: "limited",
+    expiresAt: activeLock?.expiresAt ?? null,
+    retryAfterSeconds: getRetryAfterSeconds(activeLock?.expiresAt, now),
+  };
+}
+
+export async function releaseWaitlistIpRateLimit(
+  rateLimitCollection: Collection<WaitlistIpRateLimit>,
+  {
+    ip,
+    expiresAt,
+  }: {
+    ip: string;
+    expiresAt: Date;
+  }
+) {
+  await rateLimitCollection.deleteOne({ _id: ip, expiresAt });
 }

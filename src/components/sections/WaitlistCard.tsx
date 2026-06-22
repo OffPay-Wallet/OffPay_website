@@ -1,9 +1,10 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 
 const ICON_PATH =
   "m55.9 51h-27.2v-2.2h28.5c-0.5-1.1-1.3-1.9-3.4-1.8h-29.3c-3.9-0.1-6 3.1-6 6.5v25.5c0 5.3 3.5 8.8 10.3 8.9h19.5c6.8 0.1 11.5-3.2 11.9-9.1v-23.8c0.1-2.7-1.6-4-4.3-4zm-21.3 19.6h-7.3v-3c0-1.6 1.3-3.5 3.7-3.3 2.1 0.2 3.6 1.7 3.6 3.7v2.6zm16 0h-7.6v-2.8c0-1.9 1.6-3.7 3.8-3.7s3.8 1.6 3.8 3.6v2.9z";
+const WAITLIST_RATE_LIMIT_UNTIL_KEY = "offpay_waitlist_rate_limited_until";
 
 function AppIcon({ className }: { className?: string }) {
   return (
@@ -34,6 +35,20 @@ function formatRetryAfter(seconds: number) {
   return `${Math.ceil(seconds / 60)}m`;
 }
 
+function getStoredRateLimitUntil() {
+  if (typeof window === "undefined") {
+    return null;
+  }
+
+  const storedValue = Number(
+    window.localStorage.getItem(WAITLIST_RATE_LIMIT_UNTIL_KEY)
+  );
+
+  return Number.isFinite(storedValue) && storedValue > Date.now()
+    ? storedValue
+    : null;
+}
+
 function getFriendlyWaitlistError(data: WaitlistResponse | null) {
   if (!data) {
     return "We couldn't reach the waitlist. Please try again in a moment.";
@@ -52,6 +67,14 @@ function getFriendlyWaitlistError(data: WaitlistResponse | null) {
     return "We couldn't add you right now. Please try again in a few minutes.";
   }
 
+  if (data.code === "already_registered") {
+    return "This email is already on the waitlist.";
+  }
+
+  if (data.code === "ip_already_registered") {
+    return "This IP has already joined the waitlist.";
+  }
+
   if (data.code === "invalid_email" || data.code === "invalid_request") {
     return data.error || "Please check your email and try again.";
   }
@@ -65,11 +88,64 @@ export default function WaitlistCard({ initialCount }: { initialCount: number })
   const [error, setError] = useState<string | null>(null);
   const [shake, setShake] = useState(false);
   const [count, setCount] = useState(initialCount);
+  const [rateLimitedUntil, setRateLimitedUntil] = useState<number | null>(
+    getStoredRateLimitUntil
+  );
   const inputRef = useRef<HTMLInputElement>(null);
+  const isRateLimited = rateLimitedUntil !== null;
+  const visibleError =
+    error ??
+    (isRateLimited
+      ? "Too many attempts. Please wait for the cooldown to expire."
+      : null);
+
+  function setRateLimitCooldown(retryAfterSeconds: number) {
+    const expiresAt = Date.now() + retryAfterSeconds * 1000;
+
+    setRateLimitedUntil(expiresAt);
+    setError(
+      `Too many attempts. Try again in ${formatRetryAfter(retryAfterSeconds)}.`
+    );
+    window.localStorage.setItem(
+      WAITLIST_RATE_LIMIT_UNTIL_KEY,
+      String(expiresAt)
+    );
+  }
+
+  useEffect(() => {
+    if (!rateLimitedUntil) {
+      return;
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      setRateLimitedUntil(null);
+      window.localStorage.removeItem(WAITLIST_RATE_LIMIT_UNTIL_KEY);
+      setError(null);
+    }, Math.max(0, rateLimitedUntil - Date.now()));
+
+    return () => window.clearTimeout(timeoutId);
+  }, [rateLimitedUntil]);
 
   function onButtonClick() {
     // If already processing, ignore
     if (status !== "idle") return;
+
+    if (rateLimitedUntil !== null) {
+      const remainingMs = rateLimitedUntil - Date.now();
+      if (remainingMs <= 0) {
+        setRateLimitedUntil(null);
+        window.localStorage.removeItem(WAITLIST_RATE_LIMIT_UNTIL_KEY);
+      } else {
+        const remainingSeconds = Math.max(1, Math.ceil(remainingMs / 1000));
+
+        setError(
+          `Too many attempts. Try again in ${formatRetryAfter(remainingSeconds)}.`
+        );
+        setShake(true);
+        setTimeout(() => setShake(false), 600);
+        return;
+      }
+    }
 
     const cleanEmail = email.trim();
 
@@ -90,6 +166,10 @@ export default function WaitlistCard({ initialCount }: { initialCount: number })
           data = (await res.json()) as WaitlistResponse;
         } catch {
           data = null;
+        }
+
+        if (typeof data?.retryAfterSeconds === "number") {
+          setRateLimitCooldown(data.retryAfterSeconds);
         }
 
         if (!res.ok || data?.status === "error") {
@@ -234,7 +314,7 @@ export default function WaitlistCard({ initialCount }: { initialCount: number })
                 value={email}
                 onChange={(e) => {
                   setEmail(e.target.value);
-                  if (error) setError(null);
+                  if (error && !isRateLimited) setError(null);
                 }}
                 onKeyDown={onInputKeyDown}
                 placeholder="Enter your email..."
@@ -246,7 +326,7 @@ export default function WaitlistCard({ initialCount }: { initialCount: number })
               <button
                 type="button"
                 onClick={onButtonClick}
-                disabled={status !== "idle"}
+                disabled={status !== "idle" || isRateLimited}
                 className={[
                   "rounded-full px-4 sm:px-4 py-[12px] sm:py-[8.5px]",
                   "flex items-center justify-center",
@@ -257,7 +337,7 @@ export default function WaitlistCard({ initialCount }: { initialCount: number })
                   "cursor-pointer select-none",
                   status === "success"
                     ? "bg-white text-black scale-105"
-                    : status === "loading"
+                    : status === "loading" || isRateLimited
                     ? "bg-white/20 text-white cursor-wait"
                     : "bg-white text-black hover:bg-[#E5E5E5] hover:scale-105 active:scale-95",
                 ].join(" ")}
@@ -327,14 +407,14 @@ export default function WaitlistCard({ initialCount }: { initialCount: number })
             </div>
 
             <p
-              role={error ? "alert" : undefined}
+              role={visibleError ? "alert" : undefined}
               aria-live="polite"
               className={[
                 "min-h-[18px] text-[11px] sm:text-xs mt-3 px-1 tracking-tight font-mono transition-colors w-full",
-                error ? "text-[#FF5C5C]" : "text-transparent",
+                visibleError ? "text-[#FF5C5C]" : "text-transparent",
               ].join(" ")}
             >
-              {error || " "}
+              {visibleError || " "}
             </p>
           </div>
 
